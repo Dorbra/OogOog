@@ -1,0 +1,197 @@
+name: build
+
+# This project is developed without a local machine. CI is not a safety net
+# bolted on beside a dev loop — it IS the dev loop. So a green run has to mean
+# more than "it compiled": it validates, then publishes to two channels.
+#
+#   Channel A (web)  -> GitHub Pages, ~2 min, no install. Iterate here.
+#   Channel B (apk)  -> a rolling "dev" prerelease with a stable URL. Truth.
+
+on:
+  push:
+    branches: [claude/godot-archer-arena, main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GODOT_VERSION: "4.7.1"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      apk_name: ${{ steps.stamp.outputs.apk_name }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot binary and export templates
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot-bin
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT_VERSION }}-v1
+
+      - name: Install Godot ${{ env.GODOT_VERSION }}
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          mkdir -p ~/godot-bin
+          curl -sSL -o /tmp/godot.zip "${BASE}/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q -o /tmp/godot.zip -d ~/godot-bin
+          mv ~/godot-bin/Godot_v${GODOT_VERSION}-stable_linux.x86_64 ~/godot-bin/godot
+          chmod +x ~/godot-bin/godot
+
+          curl -sSL -o /tmp/templates.tpz "${BASE}/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          TPL="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$TPL"
+          unzip -q -o /tmp/templates.tpz -d /tmp/templates
+          mv /tmp/templates/templates/* "$TPL"/
+
+      - name: Add Godot to PATH
+        run: echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+
+      # Verifies the pinned version actually matches .godot-version, so the
+      # repo and CI can never silently drift apart.
+      - name: Verify pinned engine version
+        run: |
+          set -euo pipefail
+          PINNED="$(tr -d '[:space:]' < .godot-version)"
+          if [ "$PINNED" != "$GODOT_VERSION" ]; then
+            echo "::error::.godot-version ($PINNED) != workflow GODOT_VERSION ($GODOT_VERSION)"
+            exit 1
+          fi
+          godot --headless --version
+
+      # Stamps the commit into the build so the running app on the phone can
+      # identify itself. Without this, "which build is that?" is unanswerable.
+      - name: Write build stamp
+        id: stamp
+        run: |
+          set -euo pipefail
+          SHORT="$(git rev-parse --short HEAD)"
+          cat > data/build_stamp.json <<EOF
+          {
+            "commit": "${SHORT}",
+            "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "run": "${GITHUB_RUN_NUMBER}"
+          }
+          EOF
+          cat data/build_stamp.json
+          echo "apk_name=oogoog-${SHORT}.apk" >> "$GITHUB_OUTPUT"
+
+      - name: Lint (gdtoolkit)
+        run: |
+          python3 -m pip install --quiet "gdtoolkit==4.*"
+          gdformat --check $(git ls-files '*.gd') || {
+            echo "::error::gdformat found unformatted files — run gdformat on them"
+            exit 1
+          }
+          gdlint $(git ls-files '*.gd')
+
+      # Builds the .godot/ import cache. Skipping this is the classic cause of
+      # a green build that produces a broken artifact.
+      - name: Import resources
+        run: godot --headless --path . --import
+
+      - name: Smoke test (headless boot)
+        run: ./tools/smoke_test.sh "$(command -v godot)" 300
+
+      - name: Export web (single-threaded)
+        run: |
+          set -euo pipefail
+          mkdir -p build/web
+          godot --headless --path . --export-debug "Web" build/web/index.html
+          test -s build/web/index.wasm
+          ls -la build/web
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Generate debug keystore
+        run: |
+          set -euo pipefail
+          keytool -keyalg RSA -genkeypair -alias androiddebugkey -keypass android \
+            -keystore "$HOME/debug.keystore" -storepass android \
+            -dname "CN=Android Debug,O=Android,C=US" -validity 9999 -deststoretype pkcs12
+          {
+            echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/debug.keystore"
+            echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey"
+            echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android"
+          } >> "$GITHUB_ENV"
+
+      # Godot finds the SDK through an editor setting, not an env var, so the
+      # settings file has to be written before a headless Android export.
+      - name: Point Godot at the Android SDK
+        run: |
+          set -euo pipefail
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          echo "Using SDK at $SDK"
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "${SDK}"
+          export/android/debug_keystore = "${HOME}/debug.keystore"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+
+      - name: Export Android APK
+        run: |
+          set -euo pipefail
+          mkdir -p build/android
+          godot --headless --path . --export-debug "Android" \
+            "build/android/${{ steps.stamp.outputs.apk_name }}"
+          ls -la build/android
+          test -s "build/android/${{ steps.stamp.outputs.apk_name }}"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/web
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: build/android/*.apk
+          if-no-files-found: error
+
+      # A single rolling prerelease means one stable URL to bookmark on the
+      # phone, instead of hunting for the newest run's artifacts each time.
+      - name: Publish rolling dev release
+        if: github.ref == 'refs/heads/claude/godot-archer-arena' || github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete dev --yes --cleanup-tag 2>/dev/null || true
+          gh release create dev \
+            --title "Dev build ${{ steps.stamp.outputs.apk_name }}" \
+            --notes "Latest build from \`${GITHUB_REF_NAME}\` (${GITHUB_SHA:0:7}), run #${GITHUB_RUN_NUMBER}.
+
+          Install the APK below on your phone. Play in the browser: ${{ steps.pages.outputs.page_url || 'see Pages deployment' }}" \
+            --prerelease \
+            build/android/*.apk
+
+  deploy-pages:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

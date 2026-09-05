@@ -1,0 +1,13 @@
+# Godot 4 import cache and generated files
+.godot/
+/android/
+
+# Export output
+build/
+*.apk
+*.aab
+*.tmp
+
+# Godot editor / OS noise
+.DS_Store
+*.translation
