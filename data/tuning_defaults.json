@@ -1,13 +1,31 @@
 {
-  "move_speed":        { "value": 320.0,  "min": 50.0,  "max": 900.0,  "group": "Movement" },
-  "move_accel":        { "value": 2400.0, "min": 200.0, "max": 9000.0, "group": "Movement" },
-  "move_friction":     { "value": 2000.0, "min": 200.0, "max": 9000.0, "group": "Movement" },
+  "move_speed":            { "value": 340.0,  "min": 50.0,  "max": 900.0,  "group": "Movement" },
+  "move_accel":            { "value": 2600.0, "min": 200.0, "max": 9000.0, "group": "Movement" },
+  "move_friction":         { "value": 2200.0, "min": 200.0, "max": 9000.0, "group": "Movement" },
 
-  "stick_deadzone":    { "value": 0.12,   "min": 0.0,   "max": 0.5,    "group": "Controls" },
-  "stick_radius":      { "value": 110.0,  "min": 40.0,  "max": 260.0,  "group": "Controls" },
+  "stick_deadzone":        { "value": 0.12,   "min": 0.0,   "max": 0.5,    "group": "Controls" },
+  "stick_radius":          { "value": 110.0,  "min": 40.0,  "max": 260.0,  "group": "Controls" },
 
-  "camera_smoothing":  { "value": 8.0,    "min": 1.0,   "max": 30.0,   "group": "Camera" },
+  "draw_time_full":        { "value": 0.55,   "min": 0.1,   "max": 2.0,    "group": "Bow" },
+  "draw_min_speed":        { "value": 420.0,  "min": 100.0, "max": 1500.0, "group": "Bow" },
+  "draw_max_speed":        { "value": 1050.0, "min": 200.0, "max": 3000.0, "group": "Bow" },
+  "draw_min_damage":       { "value": 12.0,   "min": 1.0,   "max": 60.0,   "group": "Bow" },
+  "draw_max_damage":       { "value": 42.0,   "min": 5.0,   "max": 150.0,  "group": "Bow" },
+  "draw_max_deviation_deg":{ "value": 11.0,   "min": 0.0,   "max": 45.0,   "group": "Bow" },
+  "arrow_lifetime":        { "value": 1.6,    "min": 0.2,   "max": 5.0,    "group": "Bow" },
 
-  "regen_delay":       { "value": 3.0,    "min": 0.0,   "max": 10.0,   "group": "Regen" },
-  "regen_rate_pct":    { "value": 20.0,   "min": 1.0,   "max": 100.0,  "group": "Regen" }
+  "quiver_size":           { "value": 3.0,    "min": 1.0,   "max": 8.0,    "group": "Quiver" },
+  "quiver_refill_time":    { "value": 1.5,    "min": 0.1,   "max": 5.0,    "group": "Quiver" },
+
+  "snap_max_drag":         { "value": 26.0,   "min": 4.0,   "max": 120.0,  "group": "Aim assist" },
+  "snap_max_hold":         { "value": 0.18,   "min": 0.05,  "max": 1.0,    "group": "Aim assist" },
+  "snap_damage_mult":      { "value": 0.45,   "min": 0.1,   "max": 1.0,    "group": "Aim assist" },
+  "autoaim_radius":        { "value": 620.0,  "min": 100.0, "max": 2000.0, "group": "Aim assist" },
+
+  "dummy_respawn_time":    { "value": 3.0,    "min": 0.5,   "max": 15.0,   "group": "Targets" },
+
+  "camera_smoothing":      { "value": 8.0,    "min": 1.0,   "max": 30.0,   "group": "Camera" },
+
+  "regen_delay":           { "value": 3.0,    "min": 0.0,   "max": 10.0,   "group": "Regen" },
+  "regen_rate_pct":        { "value": 20.0,   "min": 1.0,   "max": 100.0,  "group": "Regen" }
 }

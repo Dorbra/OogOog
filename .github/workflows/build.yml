@@ -104,6 +104,12 @@ jobs:
       - name: Import resources
         run: godot --headless --path . --import
 
+      # Pure sim logic (draw curves, quiver economy, swept collision) verified
+      # without a display — the one form of correctness checking available when
+      # nobody involved can run the game locally.
+      - name: Unit tests
+        run: godot --headless --path . --script tools/run_tests.gd
+
       - name: Smoke test (headless boot)
         run: ./tools/smoke_test.sh "$(command -v godot)" 300
 

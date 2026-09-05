@@ -22,9 +22,22 @@ const USER_PATH := "user://tuning.json"
 
 var _defs: Dictionary = {}
 var _values: Dictionary = {}
+var _loaded := false
 
 
 func _ready() -> void:
+	_ensure_loaded()
+
+
+## Loads on first use rather than relying on _ready().
+##
+## Under `--script` (the headless test runner) autoloads are registered but
+## never enter the tree, so _ready() never fires and every lookup would return
+## 0.0 — silently, which is the worst way for a tuning system to fail.
+func _ensure_loaded() -> void:
+	if _loaded:
+		return
+	_loaded = true
 	_load_defaults()
 	_load_user_overrides()
 
@@ -65,6 +78,7 @@ func _load_user_overrides() -> void:
 
 
 func get_value(key: String) -> float:
+	_ensure_loaded()
 	if not _values.has(key):
 		push_error("Tuning: unknown key '%s'" % key)
 		return 0.0
@@ -72,6 +86,7 @@ func get_value(key: String) -> float:
 
 
 func set_value(key: String, value: float) -> void:
+	_ensure_loaded()
 	if not _defs.has(key):
 		push_error("Tuning: unknown key '%s'" % key)
 		return
@@ -85,23 +100,28 @@ func set_value(key: String, value: float) -> void:
 
 
 func get_min(key: String) -> float:
+	_ensure_loaded()
 	return float(_defs[key].get("min", 0.0))
 
 
 func get_max(key: String) -> float:
+	_ensure_loaded()
 	return float(_defs[key].get("max", 1.0))
 
 
 func get_group(key: String) -> String:
+	_ensure_loaded()
 	return String(_defs[key].get("group", "Misc"))
 
 
 func keys() -> Array:
+	_ensure_loaded()
 	return _defs.keys()
 
 
 ## Keys grouped by their "group" field, for the debug panel's sections.
 func grouped_keys() -> Dictionary:
+	_ensure_loaded()
 	var out: Dictionary = {}
 	for key: String in _defs:
 		var group := get_group(key)
@@ -112,6 +132,7 @@ func grouped_keys() -> Dictionary:
 
 
 func reset() -> void:
+	_ensure_loaded()
 	for key: String in _defs:
 		_values[key] = float(_defs[key].get("value", 0.0))
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(USER_PATH))
@@ -130,4 +151,5 @@ func save() -> bool:
 ## Flat {key: value} JSON — this is what gets pasted back into chat and
 ## committed into tuning_defaults.json.
 func to_json() -> String:
+	_ensure_loaded()
 	return JSON.stringify(_values, "  ", true)
