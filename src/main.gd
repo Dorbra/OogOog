@@ -135,7 +135,7 @@ func _draw_controls() -> void:
 	var origin := _controls.move_origin()
 	var radius := Tuning.get_value("stick_radius")
 	draw_arc(origin, radius, 0.0, TAU, 48, COL_STICK, 3.0)
-	draw_circle(origin + _world.player.velocity.normalized() * 0.0, 14.0, COL_STICK)
+	draw_circle(origin, 14.0, COL_STICK)
 
 	var knob := origin + (_controls.move_current() - origin).limit_length(radius)
 	draw_circle(knob, 26.0, Color(1, 1, 1, 0.28))
