@@ -18,8 +18,13 @@ every build is produced by GitHub Actions.
 **Never judge performance in the browser** — the web build is single-threaded and
 its timing does not match native. The APK is the source of truth.
 
-**One-time phone setup:** Settings → Apps → Chrome → *Install unknown apps* → allow.
-Android silently refuses the install otherwise.
+### One-time setup
+
+1. **Enable GitHub Pages** (repo → Settings → Pages → Source: **GitHub Actions**).
+   This cannot be scripted from CI, and the `deploy-pages` job fails until it is
+   done. The APK channel works regardless — it is a separate job.
+2. **Allow APK installs on the phone**: Settings → Apps → Chrome →
+   *Install unknown apps* → allow. Android silently refuses the install otherwise.
 
 ---
 

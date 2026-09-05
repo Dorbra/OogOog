@@ -182,7 +182,7 @@ jobs:
             --title "Dev build ${{ steps.stamp.outputs.apk_name }}" \
             --notes "Latest build from \`${GITHUB_REF_NAME}\` (${GITHUB_SHA:0:7}), run #${GITHUB_RUN_NUMBER}.
 
-          Install the APK below on your phone. Play in the browser: ${{ steps.pages.outputs.page_url || 'see Pages deployment' }}" \
+          Install the APK below on your phone. The browser build is published to this repo's GitHub Pages URL." \
             --prerelease \
             build/android/*.apk
 
