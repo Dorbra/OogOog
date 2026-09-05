@@ -20,6 +20,7 @@ var bow := Bow.new()
 
 func tick(cmd: InputCommand, delta: float, bounds: Rect2) -> void:
 	prev_position = position
+	radius = Tuning.get_value("player_radius")
 	bow.tick(delta)
 	_apply_movement(cmd.move, delta)
 	_integrate(delta, bounds)

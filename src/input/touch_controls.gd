@@ -138,9 +138,35 @@ func _update_aim(delta: float) -> void:
 	var full := Tuning.get_value("draw_time_full")
 	draw_strength = clampf(_aim_hold_time / full, 0.0, 1.0) if full > 0.0 else 1.0
 
+	_update_aim_direction(delta)
+
+	# Auto-repeat: holding keeps firing once each draw completes, so the quiver
+	# and its refill rate-limit the player instead of their thumb. Without it,
+	# every shot costs a full press-hold-release gesture, which reads as
+	# sluggish however fast the draw itself is.
+	if Tuning.get_value("auto_repeat") >= 0.5 and draw_strength >= 1.0:
+		shot_released.emit(aim_vector, 1.0, false)
+		_aim_hold_time = 0.0
+		draw_strength = 0.0
+
+
+func _update_aim_direction(delta: float) -> void:
 	var offset := _aim_current - _aim_origin
-	if offset.length() > Tuning.get_value("snap_max_drag"):
-		aim_vector = offset.normalized()
+
+	# Below the threshold the drag vector is mostly thumb noise: a 10px offset
+	# carries the same authority as a 200px one once normalised, which is what
+	# made small movements swing the shot wildly. Hold the last direction.
+	if offset.length() < Tuning.get_value("aim_min_drag"):
+		return
+
+	var target := offset.normalized()
+	if aim_vector == Vector2.ZERO:
+		aim_vector = target
+		return
+
+	# Frame-rate independent smoothing, so aim settles instead of snapping.
+	var weight := 1.0 - exp(-Tuning.get_value("aim_smoothing") * delta)
+	aim_vector = aim_vector.lerp(target, weight).normalized()
 
 
 ## Where the left thumb went down, for drawing the floating stick. Only

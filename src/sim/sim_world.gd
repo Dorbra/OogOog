@@ -32,19 +32,21 @@ func _init(world_bounds: Rect2 = Rect2(0, 0, 1280, 720)) -> void:
 	_place_dummies()
 
 
+## Targets sit in a ring around the spawn rather than spread across the arena.
+##
+## Spreading them by arena fraction put every one of them outside the camera
+## once zoom arrived — the world is much larger than the visible area now, so
+## fractions of the world are the wrong unit entirely. Ring radii are in world
+## units and alternate near/far so both close snap shots and committed
+## long-range draws can be practised, with some targets always on screen.
 func _place_dummies() -> void:
-	# Spread across the arena at different ranges, so close-quarters snap shots
-	# and long committed draws can both be practised.
-	var spots := [
-		Vector2(0.22, 0.25),
-		Vector2(0.78, 0.25),
-		Vector2(0.5, 0.15),
-		Vector2(0.22, 0.78),
-		Vector2(0.78, 0.78),
-	]
-	for spot: Vector2 in spots:
+	const RADII := [210.0, 350.0, 210.0, 350.0, 260.0]
+	var centre := bounds.get_center()
+
+	for i in RADII.size():
+		var angle := TAU * float(i) / float(RADII.size()) - PI * 0.5
 		var d := Dummy.new()
-		d.position = bounds.position + bounds.size * spot
+		d.position = centre + Vector2.RIGHT.rotated(angle) * RADII[i]
 		dummies.append(d)
 
 
@@ -72,6 +74,9 @@ func _try_fire(cmd: InputCommand) -> void:
 	if dir == Vector2.ZERO:
 		dir = player.facing
 
+	if not cmd.snap:
+		dir = _apply_aim_assist(dir)
+
 	dir = player.bow.apply_deviation(dir, cmd.draw_strength, _rng)
 
 	var arrow := _free_arrow()
@@ -86,6 +91,26 @@ func _try_fire(cmd: InputCommand) -> void:
 		Tuning.get_value("arrow_lifetime")
 	)
 	arrow_fired.emit()
+
+
+## Optional magnetism on aimed shots. Defaults to zero: bending a shot the
+## player aimed themselves erodes the whole point of committing to a draw. It
+## exists as a slider so difficulty can be dialled in on the device rather than
+## argued about here.
+func _apply_aim_assist(dir: Vector2) -> Vector2:
+	var max_angle := deg_to_rad(Tuning.get_value("aim_assist_deg"))
+	if max_angle <= 0.0:
+		return dir
+
+	var target := nearest_dummy(player.position, Tuning.get_value("autoaim_radius"))
+	if target == null:
+		return dir
+
+	var to_target := (target.position - player.position).normalized()
+	var delta := dir.angle_to(to_target)
+	if absf(delta) > max_angle:
+		return dir
+	return to_target
 
 
 func _free_arrow() -> Arrow:

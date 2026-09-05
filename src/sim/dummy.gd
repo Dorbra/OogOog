@@ -34,6 +34,7 @@ func take_damage(amount: float) -> void:
 
 
 func tick(delta: float) -> void:
+	radius = Tuning.get_value("dummy_radius")
 	hit_flash = maxf(hit_flash - delta, 0.0)
 	if alive():
 		return
