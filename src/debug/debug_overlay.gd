@@ -34,6 +34,9 @@ func _ready() -> void:
 	_build_panel()
 	_set_open(false)
 
+	_apply_safe_area()
+	get_viewport().size_changed.connect(_apply_safe_area)
+
 	Tuning.reloaded.connect(_sync_sliders_from_tuning)
 
 
@@ -42,13 +45,29 @@ func _build_toggle() -> void:
 	_toggle.text = "DBG"
 	_toggle.focus_mode = Control.FOCUS_NONE
 	_toggle.set_anchors_preset(Control.PRESET_TOP_RIGHT)
-	_toggle.offset_left = -76.0
-	_toggle.offset_top = 0.0
-	_toggle.offset_right = -EDGE_MARGIN
-	_toggle.offset_bottom = 56.0
 	_toggle.modulate = Color(1, 1, 1, 0.55)
 	_toggle.pressed.connect(func() -> void: _set_open(not _open))
 	_layer.add_child(_toggle)
+
+
+## Keeps the overlay clear of the camera cutout, rounded corners and the
+## gesture-navigation bar. Called once both controls exist, and on resize.
+func _apply_safe_area() -> void:
+	# This is a plain Node, not a CanvasItem — get_viewport_rect() is not
+	# available here, so go through the viewport itself.
+	var inset := SafeArea.margins(get_viewport().get_visible_rect().size)
+
+	if _toggle != null:
+		_toggle.offset_left = -76.0 - inset.z
+		_toggle.offset_top = inset.y
+		_toggle.offset_right = -EDGE_MARGIN - inset.z
+		_toggle.offset_bottom = inset.y + 56.0
+
+	if _panel != null:
+		_panel.offset_left = inset.x
+		_panel.offset_top = inset.y
+		_panel.offset_right = -inset.z
+		_panel.offset_bottom = -inset.w
 
 
 func _build_panel() -> void:

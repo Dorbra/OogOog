@@ -35,6 +35,15 @@ func _ready() -> void:
 	add_child(_controls)
 	_controls.shot_released.connect(_on_shot_released)
 
+	_apply_safe_area()
+	get_viewport().size_changed.connect(_apply_safe_area)
+
+
+func _apply_safe_area() -> void:
+	# The Pixel 9's cutout sits exactly where a top-left HUD line would go.
+	var inset := SafeArea.margins(get_viewport_rect().size)
+	_hud.position = Vector2(inset.x + 12.0, inset.y + 8.0)
+
 
 func _on_shot_released(aim: Vector2, draw_strength: float, snap: bool) -> void:
 	_pending_shot = true

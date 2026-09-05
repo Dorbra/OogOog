@@ -113,6 +113,16 @@ jobs:
       - name: Smoke test (headless boot)
         run: ./tools/smoke_test.sh "$(command -v godot)" 300
 
+      # The headless smoke test never calls _draw(), so without this the whole
+      # rendering path is unverified — a bad draw call would reach the phone as
+      # a black screen with nothing in CI to explain it. Runs the real scene
+      # under a virtual display and saves a PNG that can actually be looked at.
+      - name: Render test + screenshot
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb libgl1-mesa-dri >/dev/null
+          ./tools/render_test.sh "$(command -v godot)" 90 build/shot.png
+
       - name: Export web (single-threaded)
         run: |
           set -euo pipefail
@@ -168,6 +178,13 @@ jobs:
         with:
           path: build/web
 
+      - name: Upload screenshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot
+          path: build/shot.png
+          if-no-files-found: error
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
@@ -190,7 +207,7 @@ jobs:
 
           Install the APK below on your phone. The browser build is published to this repo's GitHub Pages URL." \
             --prerelease \
-            build/android/*.apk
+            build/android/*.apk build/shot.png
 
   deploy-pages:
     needs: build

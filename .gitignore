@@ -4,6 +4,7 @@
 
 # Export output
 build/
+!build/.gitkeep
 *.apk
 *.aab
 *.tmp
