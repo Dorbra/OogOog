@@ -33,6 +33,10 @@
   "autoaim_radius":        { "value": 900.0,  "min": 100.0, "max": 3000.0, "group": "Aim assist" },
   "aim_assist_deg":        { "value": 0.0,    "min": 0.0,   "max": 25.0,   "group": "Aim assist" },
 
+  "decor_density":         { "value": 1.0,    "min": 0.0,   "max": 1.0,    "group": "Art" },
+  "shadow_alpha":          { "value": 0.28,   "min": 0.0,   "max": 0.7,    "group": "Art" },
+  "bow_size":              { "value": 20.0,   "min": 6.0,   "max": 50.0,   "group": "Art" },
+
   "dummy_radius":          { "value": 42.0,   "min": 12.0,  "max": 120.0,  "group": "Targets" },
   "dummy_respawn_time":    { "value": 3.0,    "min": 0.5,   "max": 15.0,   "group": "Targets" },
 

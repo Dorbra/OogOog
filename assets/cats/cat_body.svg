@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!--
+    Cat silhouette, drawn pure white so it can be tinted per character with
+    Sprite2D.modulate. One file serves every cat colour; the untinted details
+    (eyes, nose, inner ears) live in cat_face.svg stacked on top.
+
+    Deliberately chunky and big-headed: at the size a cat occupies on a phone
+    screen, realistic proportions read as an anonymous blob. Only simple paths
+    and flat fills — Godot rasterises SVG through ThorVG, which supports a
+    subset and has no filter support.
+  -->
+  <path d="M90 102 C 118 98, 124 64, 106 53 C 99 49, 92 55, 96 61 C 108 69, 104 89, 87 92 Z" fill="#ffffff"/>
+  <ellipse cx="64" cy="94" rx="31" ry="25" fill="#ffffff"/>
+  <ellipse cx="50" cy="114" rx="11" ry="7" fill="#ffffff"/>
+  <ellipse cx="78" cy="114" rx="11" ry="7" fill="#ffffff"/>
+  <path d="M36 34 L33 7 L59 22 Z" fill="#ffffff"/>
+  <path d="M92 34 L95 7 L69 22 Z" fill="#ffffff"/>
+  <circle cx="64" cy="52" r="33" fill="#ffffff"/>
+</svg>

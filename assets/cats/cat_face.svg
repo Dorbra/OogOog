@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!--
+    Untinted details, stacked over cat_body.svg. Kept in a separate file so eyes
+    and nose don't take the body tint — a ginger cat should not have ginger eyes.
+
+    Aligned to cat_body.svg's geometry: head circle at (64,52) r33, ears at the
+    same points. Move one, move both.
+  -->
+  <path d="M40 30 L38 14 L54 24 Z" fill="#f2a3ae"/>
+  <path d="M88 30 L90 14 L74 24 Z" fill="#f2a3ae"/>
+
+  <ellipse cx="64" cy="98" rx="17" ry="13" fill="#ffffff" opacity="0.4"/>
+
+  <ellipse cx="52" cy="52" rx="7" ry="8.5" fill="#22262e"/>
+  <ellipse cx="76" cy="52" rx="7" ry="8.5" fill="#22262e"/>
+  <circle cx="54.2" cy="48.8" r="2.4" fill="#ffffff"/>
+  <circle cx="78.2" cy="48.8" r="2.4" fill="#ffffff"/>
+
+  <path d="M64 62 L58.5 57.5 L69.5 57.5 Z" fill="#f2748c"/>
+  <path d="M64 62 L64 66.5" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M64 66.5 C 60 70.5, 56 68.5, 55 65.5" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M64 66.5 C 68 70.5, 72 68.5, 73 65.5" stroke="#3a3f4a" stroke-width="2" stroke-linecap="round" fill="none"/>
+
+  <path d="M38 57 L24 53" stroke="#3a3f4a" stroke-width="1.7" stroke-linecap="round" opacity="0.55" fill="none"/>
+  <path d="M38 63 L24 65" stroke="#3a3f4a" stroke-width="1.7" stroke-linecap="round" opacity="0.55" fill="none"/>
+  <path d="M90 57 L104 53" stroke="#3a3f4a" stroke-width="1.7" stroke-linecap="round" opacity="0.55" fill="none"/>
+  <path d="M90 63 L104 65" stroke="#3a3f4a" stroke-width="1.7" stroke-linecap="round" opacity="0.55" fill="none"/>
+</svg>
