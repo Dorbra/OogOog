@@ -21,6 +21,9 @@ var _fighter_views: Array[CatView] = []
 ## above the cats. See Terrain.draw_canopy.
 var _canopy: Node2D
 
+## Peer id -> the cat drawn for that remote player (LAN spike).
+var _remote_views: Dictionary = {}
+
 # Recent positions per arrow, for trails. Indexed to match the arrow pool so no
 # lookup or allocation happens per frame.
 var _trails: Array[Array] = []
@@ -64,11 +67,38 @@ func _ready() -> void:
 	)
 
 
+## Remote players from the LAN spike, drawn as cats so a connection is obvious
+## at a glance rather than being a number on a debug panel. Created on demand
+## because peers arrive and leave at runtime.
+##
+## Separate from the fighter views on purpose: a remote peer is not yet a
+## Fighter in this simulation. M3.3 makes the host authoritative and remote
+## players become ordinary fighters, at which point this goes away.
+func _sync_remote_views() -> void:
+	for id: int in Net.peer_positions:
+		if not _remote_views.has(id):
+			var view := CatView.new()
+			view.tint = Palette.CAT_REMOTE
+			view.show_bow = false
+			view.z_index = 1
+			add_child(view)
+			_remote_views[id] = view
+		var remote: CatView = _remote_views[id]
+		remote.position = Net.peer_positions[id]
+		remote.radius = Tuning.get_value("fighter_radius")
+
+	for id: int in _remote_views.keys():
+		if not Net.peer_positions.has(id):
+			_remote_views[id].queue_free()
+			_remote_views.erase(id)
+
+
 static func _team_tint(team: int) -> Color:
 	return Palette.TEAM_A if team == 0 else Palette.TEAM_B
 
 
 func _process(delta: float) -> void:
+	_sync_remote_views()
 	_sync_views(delta)
 	_track_trails()
 	queue_redraw()

@@ -141,6 +141,14 @@ jobs:
       - name: Docs link check
         run: bash tests/test_docs_links.sh
 
+      # Two Godot processes over 127.0.0.1. Exercises the whole networking path
+      # except the radio: server creation, client connection, peer signals, RPC
+      # delivery, state crossing both ways. What it cannot answer — does the
+      # household router carry the traffic, and what is the real latency — is
+      # exactly what the M3.0 spike ships to a phone to find out.
+      - name: LAN loopback test
+        run: bash tests/test_net_loopback.sh "$(command -v godot)"
+
       # The headless smoke test never calls _draw(), so without this the whole
       # rendering path is unverified. The combat capture additionally drives a
       # real shot and captures on impact, exercising the feedback layer.

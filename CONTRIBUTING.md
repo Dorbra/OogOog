@@ -46,6 +46,7 @@ gdlint  $(git ls-files '*.gd')                        # lint
 "$GODOT" --headless --path . --script tools/run_tests.gd
 bash tests/test_publish_web.sh                        # CI publish logic
 bash tests/test_docs_links.sh                         # no dead doc links
+./tests/test_net_loopback.sh "$GODOT"                 # two processes talk
 ./tools/verify_pack.sh "$GODOT" Web                   # does the EXPORT have the data?
 ./tools/smoke_test.sh  "$GODOT" 300                   # does it boot?
 ./tools/render_test.sh "$GODOT" 90  build/shot.png   idle
