@@ -15,6 +15,10 @@ var _camera: CameraRig
 var _player_view: CatView
 var _dummy_views: Array[CatView] = []
 
+## Bushes draw here rather than with the rest of the terrain, on a node ordered
+## above the cats. See Terrain.draw_canopy.
+var _canopy: Node2D
+
 # Recent positions per arrow, for trails. Indexed to match the arrow pool so no
 # lookup or allocation happens per frame.
 var _trails: Array[Array] = []
@@ -34,6 +38,11 @@ func setup(world: SimWorld, terrain: Terrain, controls: TouchControls, camera: C
 func _ready() -> void:
 	for _i in _world.arrows.size():
 		_trails.append([])
+
+	_canopy = Node2D.new()
+	_canopy.z_index = 3
+	_canopy.draw.connect(_draw_canopy)
+	add_child(_canopy)
 
 	for _dummy in _world.dummies:
 		var view := CatView.new()
@@ -59,6 +68,11 @@ func _process(delta: float) -> void:
 	_sync_views(delta)
 	_track_trails()
 	queue_redraw()
+	_canopy.queue_redraw()
+
+
+func _draw_canopy() -> void:
+	_terrain.draw_canopy(_canopy, _camera.view_rect(get_viewport_rect().size))
 
 
 func _sync_views(delta: float) -> void:
@@ -68,6 +82,12 @@ func _sync_views(delta: float) -> void:
 	_player_view.radius = _world.player.radius
 	_player_view.aim = _world.player.facing
 	_player_view.draw_strength = _controls.draw_strength
+
+	# Fading in cover is the only visible effect of concealment until there are
+	# opponents to hide from. Partial rather than invisible: you still need to
+	# see yourself to aim.
+	var hidden := _world.arena.conceals(_world.player.position)
+	_player_view.modulate.a = 0.55 if hidden else 1.0
 
 	for i in _dummy_views.size():
 		var dummy: Dummy = _world.dummies[i]

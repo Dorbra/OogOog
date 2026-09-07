@@ -20,6 +20,7 @@ const FLOWER_COUNT := 90
 const PEBBLE_COUNT := 70
 
 var bounds: Rect2
+var arena: Arena
 var ground: NoiseTexture2D
 
 var _tufts: Array[Dictionary] = []
@@ -30,8 +31,9 @@ var _pond_size: Vector2
 var _path_points: PackedVector2Array = PackedVector2Array()
 
 
-func _init(world_bounds: Rect2) -> void:
-	bounds = world_bounds
+func _init(from_arena: Arena) -> void:
+	arena = from_arena
+	bounds = arena.bounds()
 	_build_ground()
 	_scatter()
 
@@ -137,7 +139,7 @@ func draw_into(canvas: CanvasItem, view: Rect2) -> void:
 	_draw_path(canvas, view)
 	_draw_pond(canvas)
 	_draw_scatter(canvas, view)
-	_draw_hedges(canvas)
+	draw_walls(canvas, view)
 
 
 func _draw_ground(canvas: CanvasItem) -> void:
@@ -216,24 +218,36 @@ func _draw_scatter(canvas: CanvasItem, view: Rect2) -> void:
 		canvas.draw_circle(e["p"] + Vector2(0, -7.5), e["r"], e["c"])
 
 
-## The arena edge as a hedge ring rather than a stroked rectangle: it reads as
-## the boundary of a real place instead of a debug outline.
-func _draw_hedges(canvas: CanvasItem) -> void:
-	const T := 46.0
-	var b := bounds
-	var rects := [
-		Rect2(b.position.x, b.position.y, b.size.x, T),
-		Rect2(b.position.x, b.end.y - T, b.size.x, T),
-		Rect2(b.position.x, b.position.y, T, b.size.y),
-		Rect2(b.end.x - T, b.position.y, T, b.size.y),
-	]
-	for r: Rect2 in rects:
-		canvas.draw_rect(r, Palette.HEDGE)
+## Walls, drawn from the arena grid. Culled to the camera rect like everything
+## else — at play zoom only a fraction of the map is on screen.
+func draw_walls(canvas: CanvasItem, view: Rect2) -> void:
+	var size := Vector2(arena.cell_size, arena.cell_size)
+	for c in arena.cells_in_rect(view):
+		if c.z != Arena.Cell.WALL:
+			continue
+		var origin := Vector2(c.x, c.y) * arena.cell_size
+		canvas.draw_rect(Rect2(origin, size), Palette.WALL)
+		# A lighter top edge suggests height, so a wall reads as something to
+		# hide behind rather than as a hole in the ground.
+		canvas.draw_rect(Rect2(origin, Vector2(size.x, 8.0)), Palette.WALL_TOP)
 
-	# A lighter inner lip suggests the top of the hedge catching the light and
-	# stops the border reading as a flat wall of colour.
-	var inner := Rect2(b.position + Vector2(T, T), b.size - Vector2(T, T) * 2.0)
-	canvas.draw_rect(inner, Palette.HEDGE_TOP, false, 6.0)
+
+## Bushes, drawn ABOVE the cats by a separate canopy pass.
+##
+## Concealment only reads if the cat is visually inside the cover; drawn under
+## the sprites it would look like a cat standing on a green patch.
+func draw_canopy(canvas: CanvasItem, view: Rect2) -> void:
+	var size := Vector2(arena.cell_size, arena.cell_size)
+	for c in arena.cells_in_rect(view):
+		if c.z != Arena.Cell.BUSH:
+			continue
+		var origin := Vector2(c.x, c.y) * arena.cell_size
+		var centre := origin + size * 0.5
+		# Three overlapping blobs rather than a square, so a bush patch reads as
+		# foliage instead of tiling.
+		canvas.draw_circle(centre + Vector2(-13, 4), 25.0, Palette.HEDGE)
+		canvas.draw_circle(centre + Vector2(14, 7), 22.0, Palette.HEDGE)
+		canvas.draw_circle(centre + Vector2(0, -10), 26.0, Palette.HEDGE_TOP)
 
 
 static func _draw_ellipse(canvas: CanvasItem, centre: Vector2, radii: Vector2, col: Color) -> void:

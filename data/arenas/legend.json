@@ -1,0 +1,14 @@
+{
+  "cell_size": 60,
+  "symbols": {
+    "#": { "name": "wall",  "solid": true,  "conceals": false },
+    "b": { "name": "bush",  "solid": false, "conceals": true  },
+    "P": { "name": "spawn", "solid": false, "conceals": false },
+    ".": { "name": "open",  "solid": false, "conceals": false }
+  },
+  "notes": [
+    "Hand-edited. Rows may be ragged and unknown characters may appear;",
+    "the parser treats both as open ground rather than failing the build.",
+    "Grid size defines the world: cols * cell_size x rows * cell_size."
+  ]
+}

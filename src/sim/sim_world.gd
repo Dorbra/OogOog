@@ -22,44 +22,61 @@ const ARROW_POOL_SIZE := 150
 var player := Actor.new()
 var dummies: Array[Dummy] = []
 var arrows: Array[Arrow] = []
+var arena: Arena
 var bounds: Rect2 = Rect2(0, 0, 1280, 720)
 
 var _rng := RandomNumberGenerator.new()
 
 
-func _init(world_bounds: Rect2 = Rect2(0, 0, 1280, 720)) -> void:
-	bounds = world_bounds
+## The arena defines the world, not the caller. Bounds used to be a constant in
+## main.gd that SimWorld, Terrain and CameraRig each had to agree on by hand;
+## now editing the arena text file resizes everything at once.
+func _init(from_arena: Arena = null) -> void:
+	arena = from_arena if from_arena != null else Arena.new()
+	bounds = arena.bounds()
 	_rng.randomize()
-	player.position = bounds.get_center()
-	player.prev_position = player.position
 
 	arrows.resize(ARROW_POOL_SIZE)
 	for i in ARROW_POOL_SIZE:
 		arrows[i] = Arrow.new()
 
-	_place_dummies()
+	_place_from_spawns()
 
 
-## Targets sit in a ring around the spawn rather than spread across the arena.
+## Spawn points come from the arena's `P` cells now, replacing the hardcoded
+## ring. The ring existed only because there was no map; with one, placement is
+## a level-design decision and belongs in the text file where it can be edited
+## and reviewed without touching code.
 ##
-## Spreading them by arena fraction put every one of them outside the camera
-## once zoom arrived — the world is much larger than the visible area now, so
-## fractions of the world are the wrong unit entirely. Ring radii are in world
-## units and alternate near/far so both close snap shots and committed
-## long-range draws can be practised, with some targets always on screen.
-func _place_dummies() -> void:
-	const RADII := [210.0, 350.0, 210.0, 350.0, 260.0]
+## The player takes the spawn nearest the middle so the opening view is central,
+## and targets take the rest, farthest-first so the arena reads as populated
+## rather than crowded around one corner.
+func _place_from_spawns() -> void:
+	var points := arena.spawn_points()
 	var centre := bounds.get_center()
 
-	for i in RADII.size():
-		var angle := TAU * float(i) / float(RADII.size()) - PI * 0.5
+	if points.is_empty():
+		push_warning("Arena has no spawn points; falling back to centre")
+		player.position = centre
+		player.prev_position = centre
+		return
+
+	points.sort_custom(
+		func(a: Vector2, b: Vector2) -> bool:
+			return a.distance_squared_to(centre) < b.distance_squared_to(centre)
+	)
+
+	player.position = points[0]
+	player.prev_position = player.position
+
+	for i in range(1, points.size()):
 		var d := Dummy.new()
-		d.position = centre + Vector2.RIGHT.rotated(angle) * RADII[i]
+		d.position = points[i]
 		dummies.append(d)
 
 
 func tick(cmd: InputCommand, delta: float) -> void:
-	player.tick(cmd, delta, bounds)
+	player.tick(cmd, delta, arena)
 
 	for dummy in dummies:
 		dummy.tick(delta)
@@ -137,11 +154,19 @@ func _tick_arrows(delta: float) -> void:
 			continue
 
 		var was_active := arrow.active
+		var from := arrow.position
 		arrow.tick(delta, bounds)
 		if not arrow.active:
 			if was_active:
 				arrow_expired.emit(arrow.position)
 			continue
+
+		# Walls are checked BEFORE targets, and the arrow's segment is shortened
+		# to the impact point first — otherwise a target standing behind a wall
+		# would still be hit by a shot that should have been stopped by it.
+		var wall: Dictionary = arena.cast_segment(from, arrow.position)
+		if wall["hit"]:
+			arrow.position = wall["point"]
 
 		for dummy in dummies:
 			if not dummy.alive():
@@ -150,6 +175,10 @@ func _tick_arrows(delta: float) -> void:
 				apply_damage(dummy, arrow.damage, arrow.velocity.normalized(), arrow.full_draw)
 				arrow.deactivate()
 				break
+
+		if arrow.active and wall["hit"]:
+			arrow.deactivate()
+			arrow_expired.emit(arrow.position)
 
 
 ## The single funnel for every point of damage in the game.

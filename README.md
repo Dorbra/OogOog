@@ -110,12 +110,15 @@ src/
   main.gd             Thin orchestrator — builds the world, pumps input
   sim/                Simulation. Never reads Input, never touches a sprite.
                       input_command, sim_world, actor, bow, arrow, dummy, health
+  arena/              arena.gd — ASCII grid: walls, bushes, spawns, collision
   input/              touch_controls — multi-touch routed by FINGER INDEX
   view/               game_view, camera_rig, fx, hud, cat_view, terrain,
                       palette, safe_area
   debug/              tuning, debug_overlay, build_info
 assets/cats/          Hand-written SVG: tintable body + untinted face
 data/
+  arenas/arena_01.txt     the map, as text — edit it to change the level
+  arenas/legend.json      symbol meanings and cell size
   tuning_defaults.json    every feel parameter, live-adjustable on device
   build_stamp.json        overwritten by CI so the app identifies its own commit
 tests/                Run headless via tools/run_tests.gd
