@@ -6,8 +6,16 @@ extends RefCounted
 ## touches a node — the caller feeds it an InputCommand and reads state back
 ## out for rendering.
 
-signal dummy_hit(position: Vector2, damage: float)
-signal arrow_fired
+## Typed events, emitted at the MOMENT something happens.
+##
+## The view used to poll sim state each frame, which can express "is hurt" but
+## never "was just hit, from that direction, for this much" — and every piece of
+## feedback needs the latter. All damage funnels through apply_damage() so no
+## code path can bypass these.
+signal hit(position: Vector2, direction: Vector2, damage: float, full_draw: bool)
+signal killed(position: Vector2, direction: Vector2)
+signal fired(position: Vector2, direction: Vector2, draw_strength: float)
+signal arrow_expired(position: Vector2)
 
 const ARROW_POOL_SIZE := 150
 
@@ -83,14 +91,17 @@ func _try_fire(cmd: InputCommand) -> void:
 	if arrow == null:
 		return
 
+	var origin := player.position + dir * player.radius
 	arrow.launch(
-		player.position + dir * player.radius,
+		origin,
 		dir,
 		player.bow.speed_for(cmd.draw_strength),
 		player.bow.damage_for(cmd.draw_strength, cmd.snap),
 		Tuning.get_value("arrow_lifetime")
 	)
-	arrow_fired.emit()
+	# A snap shot is never a "full draw" however long the thumb happened to rest.
+	arrow.full_draw = cmd.draw_strength >= 0.98 and not cmd.snap
+	fired.emit(origin, dir, cmd.draw_strength)
 
 
 ## Optional magnetism on aimed shots. Defaults to zero: bending a shot the
@@ -125,18 +136,37 @@ func _tick_arrows(delta: float) -> void:
 		if not arrow.active:
 			continue
 
+		var was_active := arrow.active
 		arrow.tick(delta, bounds)
 		if not arrow.active:
+			if was_active:
+				arrow_expired.emit(arrow.position)
 			continue
 
 		for dummy in dummies:
 			if not dummy.alive():
 				continue
 			if arrow.hits_circle(dummy.position, dummy.radius):
-				dummy.take_damage(arrow.damage)
-				dummy_hit.emit(dummy.position, arrow.damage)
+				apply_damage(dummy, arrow.damage, arrow.velocity.normalized(), arrow.full_draw)
 				arrow.deactivate()
 				break
+
+
+## The single funnel for every point of damage in the game.
+##
+## Keeping this as the only entry point is what guarantees the view never misses
+## a hit: there is no second path that damages something quietly.
+func apply_damage(target: Dummy, amount: float, direction: Vector2, full_draw: bool) -> void:
+	var applied := target.take_damage(amount)
+	if applied <= 0.0:
+		return
+
+	target.apply_knockback(direction, Tuning.get_value("knockback_force"))
+	hit.emit(target.position, direction, applied, full_draw)
+
+	if target.health.died_this_tick:
+		target.health.died_this_tick = false
+		killed.emit(target.position, direction)
 
 
 func nearest_dummy(from: Vector2, max_range: float) -> Dummy:

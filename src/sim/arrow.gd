@@ -16,6 +16,10 @@ var damage: float = 0.0
 var life: float = 0.0
 var active: bool = false
 
+## Whether this arrow came from a committed full draw. Carried on the projectile
+## rather than looked up at impact, because by then the draw is long over.
+var full_draw: bool = false
+
 
 func launch(from: Vector2, dir: Vector2, speed: float, dmg: float, lifetime: float) -> void:
 	position = from

@@ -37,6 +37,22 @@
   "shadow_alpha":          { "value": 0.28,   "min": 0.0,   "max": 0.7,    "group": "Art" },
   "bow_size":              { "value": 20.0,   "min": 6.0,   "max": 50.0,   "group": "Art" },
 
+  "hitstop_hit":           { "value": 0.032,  "min": 0.0,   "max": 0.25,   "group": "Feel" },
+  "hitstop_kill":          { "value": 0.11,   "min": 0.0,   "max": 0.5,    "group": "Feel" },
+  "hitstop_scale":         { "value": 0.15,   "min": 0.02,  "max": 1.0,    "group": "Feel" },
+  "shake_hit":             { "value": 0.32,   "min": 0.0,   "max": 1.0,    "group": "Feel" },
+  "shake_kill":            { "value": 0.65,   "min": 0.0,   "max": 1.0,    "group": "Feel" },
+  "shake_fire":            { "value": 0.10,   "min": 0.0,   "max": 1.0,    "group": "Feel" },
+  "shake_decay":           { "value": 1.9,    "min": 0.2,   "max": 8.0,    "group": "Feel" },
+  "shake_max_offset":      { "value": 26.0,   "min": 0.0,   "max": 90.0,   "group": "Feel" },
+  "knockback_force":       { "value": 260.0,  "min": 0.0,   "max": 1200.0, "group": "Feel" },
+  "knockback_damping":     { "value": 1400.0, "min": 200.0, "max": 6000.0, "group": "Feel" },
+  "particle_spread_deg":   { "value": 52.0,   "min": 0.0,   "max": 180.0,  "group": "Feel" },
+  "number_size":           { "value": 26.0,   "min": 10.0,  "max": 64.0,   "group": "Feel" },
+  "squash_amount":         { "value": 0.22,   "min": 0.0,   "max": 0.8,    "group": "Feel" },
+  "trail_length":          { "value": 5.0,    "min": 0.0,   "max": 20.0,   "group": "Feel" },
+  "reticle_enabled":       { "value": 1.0,    "min": 0.0,   "max": 1.0,    "group": "Feel" },
+
   "dummy_radius":          { "value": 42.0,   "min": 12.0,  "max": 120.0,  "group": "Targets" },
   "dummy_respawn_time":    { "value": 3.0,    "min": 0.5,   "max": 15.0,   "group": "Targets" },
 

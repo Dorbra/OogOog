@@ -7,12 +7,13 @@
 # virtual display with software OpenGL, fails on any script error, and saves a
 # PNG of the result that a human (or Claude) can actually look at.
 #
-# Usage: tools/render_test.sh <godot-binary> [frames] [output.png]
+# Usage: tools/render_test.sh <godot-binary> [frames] [output.png] [idle|combat]
 set -uo pipefail
 
 GODOT="${1:?usage: render_test.sh <godot-binary> [frames] [out.png]}"
 FRAMES="${2:-90}"
 OUT="${3:-build/shot.png}"
+MODE="${4:-idle}"
 LOG="$(mktemp)"
 
 if ! command -v xvfb-run >/dev/null 2>&1; then
@@ -22,10 +23,10 @@ fi
 
 mkdir -p "$(dirname "$OUT")"
 
-echo "==> rendering ${FRAMES} frames offscreen"
+echo "==> rendering ${FRAMES} frames offscreen (mode: ${MODE})"
 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a "$GODOT" \
   --path . --rendering-driver opengl3 \
-  --script tools/screenshot.gd -- "$FRAMES" "$OUT" >"$LOG" 2>&1
+  --script tools/screenshot.gd -- "$FRAMES" "$OUT" "$MODE" >"$LOG" 2>&1
 STATUS=$?
 
 # This container has no sound hardware. ALSA/PulseAudio failures are expected

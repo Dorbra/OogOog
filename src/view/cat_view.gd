@@ -25,6 +25,11 @@ var _body: Sprite2D
 var _face: Sprite2D
 var _facing_right := true
 
+## Squash-and-stretch impulse, decaying to rest. Loosing an arrow punches the
+## cat; taking a hit flinches it. Static sprites read as cardboard, and this is
+## the cheapest possible animation given there is no animator in this workflow.
+var _punch: float = 0.0
+
 
 func _ready() -> void:
 	_body = Sprite2D.new()
@@ -44,7 +49,13 @@ func _process(_delta: float) -> void:
 	# The art is 128px tall and sits on the ground line; scale so the cat's
 	# footprint matches the simulation's collision radius.
 	var scale_factor := (radius * 2.4) / 128.0
-	_body.scale = Vector2(scale_factor, scale_factor)
+
+	# Squash conserves apparent volume — wider as it gets shorter — which is
+	# what makes it read as impact rather than as the sprite simply resizing.
+	var squash := _punch
+	var sx := scale_factor * (1.0 + squash * 0.6)
+	var sy := scale_factor * (1.0 - squash * 0.5)
+	_body.scale = Vector2(sx, sy)
 	_face.scale = _body.scale
 
 	# Anchor the sprite so its feet land on the entity position rather than its
@@ -59,7 +70,19 @@ func _process(_delta: float) -> void:
 	_face.flip_h = not _facing_right
 
 	_body.modulate = tint.lerp(Color.WHITE, flash)
+
+	# Unscaled, so the animation keeps moving during a hitstop freeze rather
+	# than locking mid-squash.
+	var dt := _delta / maxf(Engine.time_scale, 0.0001)
+	_punch = maxf(_punch - dt * 6.0, 0.0)
+	if flash > 0.0:
+		_punch = maxf(_punch, flash * Tuning.get_value("squash_amount"))
 	queue_redraw()
+
+
+## Kick the squash-and-stretch. Called when this cat looses an arrow.
+func punch(amount: float) -> void:
+	_punch = clampf(maxf(_punch, amount), 0.0, 0.9)
 
 
 func _draw() -> void:
@@ -89,7 +112,7 @@ func _draw_bow() -> void:
 		return
 
 	var size := Tuning.get_value("bow_size")
-	var centre := aim * (radius * 0.85) + Vector2(0, -radius * 0.35)
+	var centre := aim * (radius * 1.35) + Vector2(0, -radius * 0.5)
 	var angle := aim.angle()
 
 	# Arc opening away from the cat, so it reads as a bow being aimed outward.

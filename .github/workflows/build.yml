@@ -121,7 +121,11 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq xvfb libgl1-mesa-dri >/dev/null
-          ./tools/render_test.sh "$(command -v godot)" 90 build/shot.png
+          ./tools/render_test.sh "$(command -v godot)" 90 build/shot.png idle
+          # Combat capture drives a real shot and captures on impact, so the
+          # feedback layer (particles, numbers, rings, hitstop) is exercised
+          # rather than just the idle scene.
+          ./tools/render_test.sh "$(command -v godot)" 240 build/combat.png combat
 
       - name: Export web (single-threaded)
         run: |
@@ -182,7 +186,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: screenshot
-          path: build/shot.png
+          path: |
+            build/shot.png
+            build/combat.png
           if-no-files-found: error
 
       - name: Upload APK artifact
@@ -207,7 +213,7 @@ jobs:
 
           Install the APK below on your phone. The browser build is published to this repo's GitHub Pages URL." \
             --prerelease \
-            build/android/*.apk build/shot.png
+            build/android/*.apk build/shot.png build/combat.png
 
   deploy-pages:
     needs: build

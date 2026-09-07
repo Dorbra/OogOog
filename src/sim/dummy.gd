@@ -1,44 +1,54 @@
 class_name Dummy
 extends RefCounted
-## A stationary practice target.
+## A practice target.
 ##
-## Exists so M1 can answer "does drawing and loosing feel good?" — aiming at
-## empty space tells you nothing. Deliberately static: moving targets are M3's
-## job, along with the bot AI that drives them.
-
-const MAX_HEALTH := 100.0
+## Health lives in a shared Health component rather than here, so the player and
+## the bots arriving next milestone get identical hit and death semantics for
+## free. Movement is the only thing a Dummy still lacks compared to an Actor.
 
 var position: Vector2 = Vector2.ZERO
-var radius: float = 28.0
-var health: float = MAX_HEALTH
+var radius: float = 42.0
+var health := Health.new()
 
-## Counts down after a hit, purely so the view can flash. Not gameplay.
-var hit_flash: float = 0.0
+## Knockback velocity, decaying to rest. Arrows shove targets so they feel like
+## they carry mass rather than passing through.
+var velocity: Vector2 = Vector2.ZERO
 
-## Seconds remaining before a destroyed dummy comes back, so practice never
-## runs out of things to shoot.
 var respawn_timer: float = 0.0
 
 
 func alive() -> bool:
-	return health > 0.0
+	return health.alive()
 
 
-func take_damage(amount: float) -> void:
-	if not alive():
-		return
-	health = maxf(health - amount, 0.0)
-	hit_flash = 0.15
-	if not alive():
+func take_damage(amount: float) -> float:
+	var applied := health.take_damage(amount)
+	if not health.alive():
 		respawn_timer = Tuning.get_value("dummy_respawn_time")
+	return applied
+
+
+func apply_knockback(dir: Vector2, force: float) -> void:
+	velocity += dir * force
 
 
 func tick(delta: float) -> void:
 	radius = Tuning.get_value("dummy_radius")
-	hit_flash = maxf(hit_flash - delta, 0.0)
-	if alive():
+	health.tick(delta)
+
+	# Knockback decays even while dead, so a killing blow still visibly shoves
+	# the target rather than freezing it mid-air.
+	var drop := Tuning.get_value("knockback_damping") * delta
+	if velocity.length() <= drop:
+		velocity = Vector2.ZERO
+	else:
+		velocity -= velocity.normalized() * drop
+	position += velocity * delta
+
+	if health.alive():
 		return
 
 	respawn_timer -= delta
 	if respawn_timer <= 0.0:
-		health = MAX_HEALTH
+		health.revive()
+		velocity = Vector2.ZERO
