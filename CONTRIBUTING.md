@@ -61,22 +61,28 @@ a zoom change, particles that kept moving during a freeze frame.
 | Open / update a PR | `pr-<n>` prerelease with the APK, plus a sticky comment carrying the link |
 | Merge to `main` | The rolling `dev` release everyone bookmarks |
 
-Both attempt the web preview. Two caveats, both of them GitHub's rather than
-ours:
+**Only `main` publishes the web build.** A repository has exactly one Pages
+site, and its `github-pages` environment admits only the default branch, so a
+deploy from a PR head branch is refused by GitHub before any step of the job
+runs — a one-second failure with no logs. Nothing in this repository can
+authorise it.
 
-- **Pages is one shared environment per repository.** With two PRs open the URL
-  shows whichever built most recently. The commit hash in the in-game HUD is
-  what tells you which build you are actually looking at. Per-PR APKs do not
-  have this problem — each gets its own tag.
-- **The `github-pages` environment restricts which branches may deploy**, and
-  admits only the default branch unless changed. A PR preview is therefore
-  refused until someone sets Settings → Environments → github-pages →
-  Deployment branches → **All branches**.
+That job used to run on PRs anyway, under `continue-on-error`, which kept the
+run green and still painted a red X on every pull request. A check expected to
+fail is worse than no check, so it no longer runs there.
 
-For that second reason the `deploy-pages` job is `continue-on-error`. A refused
-*preview* must not block a merge when validation, tests and the APK have all
-already passed. Make **`build`** the required status check, not the whole
-workflow.
+So on a PR: **the APK is the preview.** It is also the more honest one — browser
+timings never matched the device, and the APK is this exact commit. The web
+export still runs and still has to succeed on every PR; only the *deploy* is
+skipped.
+
+Making a required status check out of **`build`** (not the whole workflow) is
+still the right setting, and now nothing else can go red anyway.
+
+If per-PR web previews ever become worth it, they need Pages served from a
+`gh-pages` branch with each PR in its own subdirectory — no environment, no
+branch policy, and no last-writer-wins. That is a deliberate change worth its
+own PR, not a workaround.
 
 ## Testing conventions
 
