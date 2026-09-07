@@ -12,7 +12,7 @@ every build is produced by GitHub Actions.
 
 | Channel | Link | Loop | Use for |
 |---|---|---|---|
-| **Web** | GitHub Pages (see the repo's Pages URL) — **`main` only** | ~2–3 min, just refresh | Movement, aim, feel, balance |
+| **Web** | GitHub Pages — `main` at the site root, each PR at `/pr/<n>/` | ~2–3 min, just refresh | Movement, aim, feel, balance |
 | **APK** | [`dev` release](../../releases/tag/dev) | ~5–8 min, download + install | Real performance, thermals, true touch latency |
 
 **Never judge performance in the browser** — the web build is single-threaded and
@@ -20,10 +20,17 @@ its timing does not match native. The APK is the source of truth.
 
 ### One-time setup
 
-1. **Enable GitHub Pages** (repo → Settings → Pages → Source: **GitHub Actions**).
-   The web build is published from `main` only — a repository has one Pages site
-   and its environment admits only the default branch, so a pull request cannot
-   deploy one. On a PR the APK *is* the preview, and it is the more truthful one.
+1. **Point GitHub Pages at the `gh-pages` branch**
+   (Settings → Pages → Source: **Deploy from a branch** → `gh-pages` / `(root)`).
+   The branch is created by the first build that runs after this change, so if
+   the branch is not offered yet, let a build finish and come back.
+
+   Then **Settings → Environments → `github-pages` → Deployment branches and
+   tags → No restriction.** This one is not optional and not obvious: GitHub
+   runs its own `pages-build-deployment` workflow for branch-served Pages, and
+   that workflow goes through this environment. A stale branch rule here refuses
+   it silently — see [CONTRIBUTING.md](CONTRIBUTING.md#why-the-web-build-is-published-by-pushing-a-branch),
+   which is worth reading once, because the failure produces no logs at all.
 2. **Allow APK installs on the phone**: Settings → Apps → Chrome →
    *Install unknown apps* → allow. Android silently refuses the install otherwise.
 3. **Protect `main`** (Settings → Branches → add a rule for `main`):
@@ -54,8 +61,9 @@ Opening a PR builds it and comments the APK link on the thread, so a change can
 be played on the phone **before** it is approved. That matters here more than in
 most projects: whether something feels right is not reviewable in a diff.
 
-A PR does **not** get a web preview — the single Pages site belongs to `main`.
-The APK on the PR is the thing to play.
+Each PR also gets its own web preview at `/pr/<n>/`, removed when the PR closes.
+It is a separate directory from the site root, so a PR can never overwrite the
+URL you bookmark and two open PRs cannot overwrite each other.
 
 ---
 
@@ -123,7 +131,8 @@ data/
   tuning_defaults.json    every feel parameter, live-adjustable on device
   build_stamp.json        overwritten by CI so the app identifies its own commit
 tests/                Run headless via tools/run_tests.gd
-tools/                smoke_test.sh, render_test.sh, screenshot.gd, run_tests.gd
+tools/                smoke_test.sh, render_test.sh, screenshot.gd, run_tests.gd,
+                      publish_web.sh — pushes the web build to `gh-pages`
 ```
 
 ### Architecture

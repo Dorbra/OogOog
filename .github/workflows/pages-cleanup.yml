@@ -1,0 +1,48 @@
+name: pages-cleanup
+
+# Removes a pull request's web preview from the `gh-pages` branch when the pull
+# request closes.
+#
+# Without this, every merged PR leaves a ~40 MB directory on the branch forever.
+# The debug wasm and the .pck are most of that, so it is not a rounding error —
+# a dozen merged PRs would outweigh the entire rest of the repository.
+#
+# This lives in its own workflow rather than as a `closed` type on build.yml so
+# that workflow does not need "and not closed" threaded through every job
+# condition. It shares build.yml's concurrency group because both force-push the
+# same branch and must never do so at the same time.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: gh-pages-publish
+  cancel-in-progress: false
+
+jobs:
+  remove-preview:
+    # A pull request from a fork gets a read-only token, so the push would fail.
+    # No preview was published for it either (build.yml carries the same guard),
+    # so there is nothing to clean up.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/publish_web.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Remove the preview directory
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.number }}
+        run: |
+          set -euo pipefail
+          ./tools/publish_web.sh remove \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" \
+            "pr/${PR}" \
+            "web: drop preview for closed PR #${PR}"
