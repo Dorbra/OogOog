@@ -133,6 +133,7 @@ data/
 tests/                Run headless via tools/run_tests.gd
 tools/                smoke_test.sh, render_test.sh, screenshot.gd, run_tests.gd,
                       publish_web.sh — pushes the web build to `gh-pages`
+                      verify_pack.sh — the EXPORT really contains its data files
 ```
 
 ### Architecture

@@ -45,6 +45,7 @@ gdlint  $(git ls-files '*.gd')                        # lint
 "$GODOT" --headless --path . --import                 # import cache
 "$GODOT" --headless --path . --script tools/run_tests.gd
 bash tests/test_publish_web.sh                        # CI publish logic
+./tools/verify_pack.sh "$GODOT" Web                   # does the EXPORT have the data?
 ./tools/smoke_test.sh  "$GODOT" 300                   # does it boot?
 ./tools/render_test.sh "$GODOT" 90  build/shot.png   idle
 ./tools/render_test.sh "$GODOT" 240 build/combat.png combat
@@ -54,6 +55,25 @@ bash tests/test_publish_web.sh                        # CI publish logic
 a phone, and they have caught bugs no test did: an autoload that failed to
 instantiate, a HUD drawn under the camera cutout, targets pushed off-camera by
 a zoom change, particles that kept moving during a freeze frame.
+
+### Data files must be added to `include_filter`
+
+Every check above except `verify_pack.sh` runs the project **from source**, where
+data files are simply on disk. Exports are different: `export_filter` is
+`all_resources`, and Godot only counts things it can import as resources. A
+`.json` or `.svg` qualifies. **A `.txt` does not.**
+
+That is not hypothetical. `data/arenas/arena_01.txt` was dropped from every
+export for two merged PRs. In the packaged game the arena had zero cells, so the
+world had size zero, there were no walls and no spawn points, the ground drew
+into an empty rect and the player fell back to the origin — a grey void with a
+pond in it. Every test passed the whole time, because every test read the file
+straight off the disk.
+
+So: **adding a data file with a new extension means adding it to
+`include_filter` in `export_presets.cfg`, in both presets.** `verify_pack.sh`
+derives its list from the `res://` literals in `src/`, so it covers new files
+automatically — but it can only tell you afterwards.
 
 ## What CI does with your PR
 
