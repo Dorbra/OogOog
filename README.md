@@ -21,6 +21,11 @@ its timing does not match native. The APK is the source of truth.
 ### One-time setup
 
 1. **Enable GitHub Pages** (repo → Settings → Pages → Source: **GitHub Actions**).
+   To also get web previews from pull requests, set
+   Settings → Environments → **github-pages** → Deployment branches → **All
+   branches**. GitHub restricts this environment to the default branch by
+   default, so without it PR previews are refused and only `main` deploys.
+   The APK is unaffected either way.
 2. **Allow APK installs on the phone**: Settings → Apps → Chrome →
    *Install unknown apps* → allow. Android silently refuses the install otherwise.
 3. **Protect `main`** (Settings → Branches → add a rule for `main`):

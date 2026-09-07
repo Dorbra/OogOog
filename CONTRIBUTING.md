@@ -56,11 +56,22 @@ a zoom change, particles that kept moving during a freeze frame.
 | Open / update a PR | `pr-<n>` prerelease with the APK, plus a sticky comment carrying the link |
 | Merge to `main` | The rolling `dev` release everyone bookmarks |
 
-Both also deploy the web preview. **GitHub Pages is a single shared environment
-for the whole repository**, so with two PRs open it shows whichever built most
-recently — the commit hash in the in-game HUD is what tells you which build you
-are actually looking at. Per-PR APKs do not have this problem; each gets its own
-tag.
+Both attempt the web preview. Two caveats, both of them GitHub's rather than
+ours:
+
+- **Pages is one shared environment per repository.** With two PRs open the URL
+  shows whichever built most recently. The commit hash in the in-game HUD is
+  what tells you which build you are actually looking at. Per-PR APKs do not
+  have this problem — each gets its own tag.
+- **The `github-pages` environment restricts which branches may deploy**, and
+  admits only the default branch unless changed. A PR preview is therefore
+  refused until someone sets Settings → Environments → github-pages →
+  Deployment branches → **All branches**.
+
+For that second reason the `deploy-pages` job is `continue-on-error`. A refused
+*preview* must not block a merge when validation, tests and the APK have all
+already passed. Make **`build`** the required status check, not the whole
+workflow.
 
 ## Testing conventions
 
