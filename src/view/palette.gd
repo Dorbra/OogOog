@@ -33,7 +33,13 @@ const PEBBLE := Color("8d8f88")
 const TUFT := Color("356b31")
 
 # Characters.
-const CAT_PLAYER := Color("e08a3c")  # ginger
+# Teams. Blue vs red because that pair survives every form of colour blindness
+# badly BUT is what the reference game trained these players on, so it is backed
+# up by position (teams start on opposite sides) and by the player's own cat
+# being ginger — nobody has to identify themselves by team colour alone.
+const TEAM_A := Color("4a90d9")  # blue
+const TEAM_B := Color("d95f4a")  # red
+const CAT_PLAYER := Color("e08a3c")  # ginger — always you, whichever team
 const CAT_ENEMY := Color("8b9199")  # grey
 const CAT_REMOTE := Color("6fa8dc")  # blue — another person, not a bot
 const SHADOW := Color(0.0, 0.0, 0.0, 0.28)

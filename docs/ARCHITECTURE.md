@@ -43,7 +43,7 @@ Three consequences worth stating plainly:
 
 | Path | Layer | May depend on | Contains |
 |---|---|---|---|
-| `src/sim/` | Simulation | `Tuning`, `Arena` | `input_command`, `sim_world`, `actor`, `bow`, `arrow`, `dummy`, `health` |
+| `src/sim/` | Simulation | `Tuning`, `Arena` | `input_command`, `sim_world`, `fighter`, `bow`, `arrow`, `health` |
 | `src/arena/` | World data | `Tuning` | `arena.gd` — ASCII grid, collision, spawns |
 | `src/input/` | Producer | `Tuning`, Godot `Input` | `touch_controls.gd` |
 | `src/view/` | Presentation | everything | `game_view`, `camera_rig`, `fx`, `hud`, `cat_view`, `terrain`, `palette`, `safe_area` |
@@ -134,7 +134,7 @@ arrow's segment to the impact point first:
 var wall := arena.cast_segment(from, arrow.position)
 if wall["hit"]:
     arrow.position = wall["point"]     # segment truncated BEFORE target tests
-for dummy in dummies: ...              # so cover actually works
+for f in fighters: ...                  # so cover actually works
 ```
 
 Reverse the order and a target standing behind a wall gets hit through it.
@@ -160,8 +160,7 @@ second path that damages something quietly ([ADR-0007](decisions/0007-typed-sim-
 
 | Type | Owns | Notably does *not* own |
 |---|---|---|
-| `Actor` | position, velocity, facing, `Bow` | health (not yet — see §9) |
-| `Dummy` | position, `Health`, knockback velocity, respawn | movement input |
+| `Fighter` | position, velocity, facing, `team`, `Health`, `Bow`, knockback, respawn | who is driving it |
 | `Health` | hp, regen, death latch | anything visual |
 | `Bow` | quiver, refill accumulator, draw→(speed, damage, deviation) curves | the arrow |
 | `Arrow` | position, velocity, damage, lifetime, `full_draw` | what it hits |
@@ -179,7 +178,7 @@ No `Area2D`, no `PhysicsBody2D`, no collision layers
   and unit-testable. Sampling points along the segment would reintroduce
   tunnelling in a second place, which is not a trade worth making for fewer
   lines.
-- **Actor vs. wall — circle push-out, iterated twice.** One pass leaves a circle
+- **Fighter vs. wall — circle push-out, iterated twice.** One pass leaves a circle
   wedged in a concave corner still overlapping the other wall. Velocity into the
   surface is cancelled on contact, otherwise the actor keeps accelerating into
   the wall and shoots off at full speed on release.
@@ -290,8 +289,8 @@ Two non-obvious details:
 
 | Debt | Cost today | Where it gets paid |
 |---|---|---|
-| `Actor` has no `Health`; only `Dummy` does | The player cannot be hurt | `feat/match-loop` |
-| `Actor` and `Dummy` are separate types | Bots will want both halves | `feat/bots` finishes the unification `Health` started |
+| Nobody drives the enemy fighters | They stand still; there is no opponent yet | `feat/bots` |
+| No score, timer or win condition | A fight has no end | `feat/match-loop` |
 | `Tuning.get_value()` called per-tick at ~40 sites | Dictionary lookup in hot paths | `chore/tech-debt` — cache on the `changed` signal |
 | `SimWorld._free_arrow()` is a linear scan of 150 | O(n) per shot | `chore/tech-debt` — free list |
 | Web export is a debug build (36 MB wasm) | Slow first load on mobile data | `chore/tech-debt` — release-mode export |

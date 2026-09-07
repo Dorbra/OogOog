@@ -57,11 +57,10 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 			push_error("screenshot: main scene exposes no `world` to drive")
 			quit(1)
 			return
-		if true:
-			world.hit.connect(
-				func(_p: Vector2, _d: Vector2, _dmg: float, _f: bool) -> void:
-					_hit_seen.append(true)
-			)
+		_stage_target(world)
+		world.hit.connect(
+			func(_p: Vector2, _d: Vector2, _dmg: float, _f: bool) -> void: _hit_seen.append(true)
+		)
 
 	for i in frames:
 		if mode == "combat":
@@ -69,12 +68,18 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 			if not _hit_seen.is_empty():
 				_frames_since_hit += 1
 				if _frames_since_hit >= CAPTURE_DELAY:
+					# Says WHY it captured. Without this a combat run that never
+					# landed a hit still writes a plausible-looking screenshot
+					# and reports success — the capture would silently stop
+					# testing the feedback layer while still going green.
+					print("screenshot: combat captured ON HIT")
 					await RenderingServer.frame_post_draw
 					_save(out)
 					return
 		await process_frame
 
 	if mode == "combat":
+		print("screenshot: combat capture TIMED OUT WITHOUT A HIT")
 		push_warning("screenshot: no hit landed in %d frames, capturing anyway" % frames)
 	await RenderingServer.frame_post_draw
 	_save(out)
@@ -82,13 +87,49 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 
 ## Fires at a target and captures shortly after impact, so the frame contains
 ## live particles, a damage number, a ring and an in-flight knockback.
+## Puts one enemy at a fixed, in-frame distance before driving the shot.
+##
+## Teams now start at opposite ends of the arena, which is right for a match and
+## useless for a screenshot: the nearest enemy is beyond both the camera and the
+## arrow's range, so the capture would show a shot sailing into empty grass. The
+## arrangement is deliberate and stated rather than hidden — this is a test
+## fixture, not gameplay.
+func _stage_target(world) -> void:
+	var target = world.nearest_enemy(world.player.position, 100000.0, world.player)
+	if target == null:
+		return
+
+	# A fixed offset is not good enough: +360 on the x axis drops the target
+	# inside the wall block beside the left spawn, so every arrow struck stone
+	# and the capture silently stopped showing a hit at all. Ask the arena
+	# instead — an open cell with a clear line of fire, whatever the map looks
+	# like. This survives the arena being re-authored, which it just was.
+	var from: Vector2 = world.player.position
+	for distance in [300.0, 240.0, 380.0, 180.0]:
+		for step in 16:
+			var angle := TAU * float(step) / 16.0
+			var spot: Vector2 = from + Vector2(cos(angle), sin(angle)) * distance
+			var cell: Vector2i = world.arena.cell_at(spot)
+			if world.arena.is_solid(cell.x, cell.y):
+				continue
+			if world.arena.cast_segment(from, spot)["hit"]:
+				continue
+			target.position = spot
+			target.prev_position = spot
+			target.spawn_point = spot
+			print("screenshot: staged target at %s (%.0fpx away)" % [str(spot), distance])
+			return
+
+	push_warning("screenshot: found nowhere open to stage a target")
+
+
 func _drive_combat(main: Node, frame: int) -> void:
 	var world = main.get("world")
 	var controls = main.get("controls")
 	if world == null or controls == null:
 		return
 
-	var target = world.nearest_dummy(world.player.position, 4000.0)
+	var target = world.nearest_enemy(world.player.position, 100000.0, world.player)
 	if target == null:
 		return
 

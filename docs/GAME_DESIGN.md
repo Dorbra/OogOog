@@ -11,9 +11,12 @@ deliberately refused.
 
 ## 1. The pitch
 
-**A top-down archer brawler for phones.** Soldat's lethality inside Brawl Stars'
-structure: short matches, twin-thumb controls, travelling projectiles, health
-that regenerates out of combat.
+**A 3v3 top-down archer brawler for phones, played over local WiFi.** Brawl
+Stars' structure — short matches, twin-thumb controls, travelling projectiles,
+health that regenerates out of combat — with cats.
+
+It used to say "Soldat's lethality" here. That was right for one adult and is
+wrong now: see the audience below.
 
 Two references, each contributing something specific:
 
@@ -25,9 +28,26 @@ Two references, each contributing something specific:
 | | Ammo as a rhythm, not a resource to hoard |
 | | Bushes: cover that breaks line of sight, not movement |
 
-**The player is one person: the developer, on a Pixel 9.** There is no audience
-to balance for and no retention metric to serve. The design target is "fun in the
-hand for ten minutes", nothing more.
+**The players are a 40-something DevOps engineer and two children, aged 5 and
+10, who love Brawl Stars.** They play together in one room, each on their own
+Android phone, over the home WiFi.
+
+That is the single most important fact in this document, and it changed the
+design after the first four milestones were already built:
+
+- **Local multiplayer is the product**, not an eventual ceiling.
+- **TTK lengthens** toward Brawl Stars' ~3–6 hits. A 5-year-old who dies in two
+  hits without understanding why stops playing.
+- **Auto-aim stops being a tax.** The snap shot used to deal half damage;
+  Brawl Stars charges nothing for tap-to-auto-aim, and taxing it punished the
+  one mechanic that makes the game playable for the youngest player.
+- **Progression must not compound.** See [ADR-0013](decisions/0013-audience-is-a-family.md).
+- **A 5-year-old cannot read.** Class select, level-ups, HUD and results have to
+  work in icons, colour and silhouette.
+
+There is deliberately **no per-player handicap system** — the user's call, made
+knowing the risk. The changes above narrow the gap without singling anyone out,
+and `aim_assist_deg` is a live slider if a session is going badly.
 
 ---
 
@@ -93,7 +113,9 @@ without a mode switch.
 ### Snap shot: auto-aim attached to the weak option
 
 Release with almost no drag and almost no hold → an instant shot, auto-aimed at
-the nearest target within `autoaim_radius`, for `snap_damage_mult` (0.5×) damage.
+the nearest target within `autoaim_radius`. It costs **no damage** — see the
+audience section; `snap_damage_mult` remains a slider so the trade can be
+re-introduced by turning a dial rather than editing code.
 
 **This is the most important single design decision in the control scheme.**
 Auto-aim is *mandatory* on a phone — precise manual aim on a 6" screen does not

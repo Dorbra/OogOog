@@ -32,6 +32,19 @@ func _init(max_hp: float = 100.0) -> void:
 	current = max_hp
 
 
+## Changes the health pool, keeping current health within it.
+##
+## Called every tick from Fighter rather than only at construction, so raising
+## the pool on a tuning slider takes effect on fighters that already exist —
+## otherwise TTK could not be tuned on the device, which is the whole point of
+## having it as a slider.
+func set_maximum(value: float) -> void:
+	if value <= 0.0 or is_equal_approx(value, maximum):
+		return
+	maximum = value
+	current = minf(current, maximum)
+
+
 func alive() -> bool:
 	return current > 0.0
 

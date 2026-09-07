@@ -20,8 +20,17 @@ var active: bool = false
 ## rather than looked up at impact, because by then the draw is long over.
 var full_draw: bool = false
 
+## Team of whoever loosed it. Carried here for the same reason as full_draw: at
+## the moment of impact the shooter may already be dead, and an arrow in flight
+## has to keep knowing whose it was. This is what makes friendly fire
+## rejectable.
+var owner_team: int = 0
 
-func launch(from: Vector2, dir: Vector2, speed: float, dmg: float, lifetime: float) -> void:
+
+func launch(
+	from: Vector2, dir: Vector2, speed: float, dmg: float, lifetime: float, team: int = 0
+) -> void:
+	owner_team = team
 	position = from
 	prev_position = from
 	velocity = dir * speed

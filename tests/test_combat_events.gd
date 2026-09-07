@@ -25,7 +25,7 @@ func _world() -> SimWorld:
 
 func test_hit_emits_once_with_applied_damage() -> void:
 	var w := _world()
-	var target: Dummy = w.dummies[0]
+	var target: Fighter = w.enemies_of(w.player.team)[0]
 
 	var events: Array = []
 	w.hit.connect(func(p, d, dmg, full): events.append({"p": p, "d": d, "dmg": dmg, "full": full}))
@@ -39,7 +39,7 @@ func test_hit_emits_once_with_applied_damage() -> void:
 
 func test_overkill_reports_only_damage_actually_applied() -> void:
 	var w := _world()
-	var target: Dummy = w.dummies[0]
+	var target: Fighter = w.enemies_of(w.player.team)[0]
 	target.health.current = 12.0
 
 	var reported: Array = []
@@ -54,7 +54,7 @@ func test_overkill_reports_only_damage_actually_applied() -> void:
 
 func test_kill_emits_once_and_not_again_while_dead() -> void:
 	var w := _world()
-	var target: Dummy = w.dummies[0]
+	var target: Fighter = w.enemies_of(w.player.team)[0]
 	target.health.current = 5.0
 
 	var kills: Array = []
@@ -70,7 +70,7 @@ func test_kill_emits_once_and_not_again_while_dead() -> void:
 
 func test_damage_on_dead_target_emits_nothing() -> void:
 	var w := _world()
-	var target: Dummy = w.dummies[0]
+	var target: Fighter = w.enemies_of(w.player.team)[0]
 	target.health.current = 0.0
 
 	var hits: Array = []
@@ -81,7 +81,7 @@ func test_damage_on_dead_target_emits_nothing() -> void:
 
 func test_hit_applies_knockback_along_the_arrow() -> void:
 	var w := _world()
-	var target: Dummy = w.dummies[0]
+	var target: Fighter = w.enemies_of(w.player.team)[0]
 	target.velocity = Vector2.ZERO
 
 	w.apply_damage(target, 10.0, Vector2.RIGHT, false)
@@ -91,11 +91,11 @@ func test_hit_applies_knockback_along_the_arrow() -> void:
 
 func test_knockback_decays_to_rest() -> void:
 	var w := _world()
-	var target: Dummy = w.dummies[0]
+	var target: Fighter = w.enemies_of(w.player.team)[0]
 	w.apply_damage(target, 10.0, Vector2.RIGHT, false)
 
 	for _i in 300:
-		target.tick(1.0 / 60.0)
+		target.tick(InputCommand.new(), 1.0 / 60.0, w.arena)
 	_runner.check_near(target.velocity.length(), 0.0, _fail("knockback comes to rest"))
 
 
