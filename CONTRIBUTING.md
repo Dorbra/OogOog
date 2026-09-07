@@ -44,6 +44,7 @@ gdformat $(git ls-files '*.gd')                       # format
 gdlint  $(git ls-files '*.gd')                        # lint
 "$GODOT" --headless --path . --import                 # import cache
 "$GODOT" --headless --path . --script tools/run_tests.gd
+bash tests/test_publish_web.sh                        # CI publish logic
 ./tools/smoke_test.sh  "$GODOT" 300                   # does it boot?
 ./tools/render_test.sh "$GODOT" 90  build/shot.png   idle
 ./tools/render_test.sh "$GODOT" 240 build/combat.png combat
@@ -58,31 +59,46 @@ a zoom change, particles that kept moving during a freeze frame.
 
 | Event | Publishes |
 |---|---|
-| Open / update a PR | `pr-<n>` prerelease with the APK, plus a sticky comment carrying the link |
-| Merge to `main` | The rolling `dev` release everyone bookmarks |
+| Open / update a PR | `pr-<n>` prerelease with the APK, a web preview at `/pr/<n>/`, and a sticky comment carrying both |
+| Merge to `main` | The rolling `dev` release, and the web build at the site root |
+| Close a PR | Removes that PR's preview directory |
 
-**Only `main` publishes the web build.** A repository has exactly one Pages
-site, and its `github-pages` environment admits only the default branch, so a
-deploy from a PR head branch is refused by GitHub before any step of the job
-runs — a one-second failure with no logs. Nothing in this repository can
-authorise it.
+Make **`build`** the required status check — that specific check rather than the
+whole workflow, so adding a job later cannot silently change what gates a merge.
 
-That job used to run on PRs anyway, under `continue-on-error`, which kept the
-run green and still painted a red X on every pull request. A check expected to
-fail is worse than no check, so it no longer runs there.
+### Why the web build is published by pushing a branch
 
-So on a PR: **the APK is the preview.** It is also the more honest one — browser
-timings never matched the device, and the APK is this exact commit. The web
-export still runs and still has to succeed on every PR; only the *deploy* is
-skipped.
+Worth knowing, because it cost hours and the failure was invisible.
 
-Making a required status check out of **`build`** (not the whole workflow) is
-still the right setting, and now nothing else can go red anyway.
+Pages used to be deployed with `actions/deploy-pages`, which runs the job inside
+the **`github-pages` environment**. That environment carries a deployment-branch
+policy, and this repository's was pinned to `claude/godot-archer-arena` — the
+branch that happened to be default when Pages was first configured. Making
+`main` the default branch later did **not** update it.
 
-If per-PR web previews ever become worth it, they need Pages served from a
-`gh-pages` branch with each PR in its own subdirectory — no environment, no
-branch policy, and no last-writer-wins. That is a deliberate change worth its
-own PR, not a workaround.
+Every deploy from `main` was then refused *before the job's first step*. The
+signature is worth memorising: **a job that fails in about one second, has no
+steps, and whose logs 404.** There is nothing to read, because nothing ran. On
+top of that the job was `continue-on-error`, so the run reported green while the
+site served a build from hours earlier.
+
+Pushing a branch needs `contents: write` and nothing else — no environment, no
+branch policy, no gate that can refuse a job before it starts. `tools/publish_web.sh`
+does the work; `tests/test_publish_web.sh` proves it against a local bare repo.
+
+Two things about that script are deliberate and easy to break:
+
+- **A root publish must not delete `pr/`.** Those previews belong to pull
+  requests that are still open.
+- **Every publish rewrites the branch to a single orphan commit.** The debug
+  wasm plus the `.pck` are ~37 MB; an ordinary commit per build would put that
+  in git history every time — roughly 700 MB after twenty builds, against
+  GitHub's 1 GB soft limit. Force-pushing a generated branch nothing checks out
+  is the standard practice, not a shortcut.
+
+The publish job also polls the live URL and fails if it never returns 200. The
+whole incident was a deploy reporting success while the site stayed stale, so
+"it pushed" is not allowed to count as "it published".
 
 ## Testing conventions
 
