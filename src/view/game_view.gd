@@ -12,8 +12,10 @@ var _terrain: Terrain
 var _controls: TouchControls
 var _camera: CameraRig
 
-var _player_view: CatView
-var _dummy_views: Array[CatView] = []
+## One per fighter, index-matched to SimWorld.fighters. The player is simply
+## fighters[0] — there is no separate player view any more, which is the view
+## side of the Actor/Dummy unification.
+var _fighter_views: Array[CatView] = []
 
 ## Bushes draw here rather than with the rest of the terrain, on a node ordered
 ## above the cats. See Terrain.draw_canopy.
@@ -44,24 +46,26 @@ func _ready() -> void:
 	_canopy.draw.connect(_draw_canopy)
 	add_child(_canopy)
 
-	for _dummy in _world.dummies:
+	for f in _world.fighters:
 		var view := CatView.new()
-		view.tint = Palette.CAT_ENEMY
-		view.show_bow = false
-		view.z_index = 1
+		var is_player := f == _world.player
+		# You are always ginger. Teammates and opponents carry the team colour,
+		# so "which of these is me" never depends on reading a team colour.
+		view.tint = Palette.CAT_PLAYER if is_player else _team_tint(f.team)
+		view.show_bow = is_player
+		view.z_index = 2 if is_player else 1
 		add_child(view)
-		_dummy_views.append(view)
+		_fighter_views.append(view)
 		_chip.append(1.0)
-
-	_player_view = CatView.new()
-	_player_view.tint = Palette.CAT_PLAYER
-	_player_view.z_index = 2
-	add_child(_player_view)
 
 	_world.fired.connect(
 		func(_p: Vector2, _d: Vector2, draw: float) -> void:
-			_player_view.punch(Tuning.get_value("squash_amount") * (0.5 + draw))
+			_fighter_views[0].punch(Tuning.get_value("squash_amount") * (0.5 + draw))
 	)
+
+
+static func _team_tint(team: int) -> Color:
+	return Palette.TEAM_A if team == 0 else Palette.TEAM_B
 
 
 func _process(delta: float) -> void:
@@ -78,27 +82,23 @@ func _draw_canopy() -> void:
 func _sync_views(delta: float) -> void:
 	var alpha := Engine.get_physics_interpolation_fraction()
 
-	_player_view.position = _world.player.render_position(alpha)
-	_player_view.radius = _world.player.radius
-	_player_view.aim = _world.player.facing
-	_player_view.draw_strength = _controls.draw_strength
+	for i in _fighter_views.size():
+		var f: Fighter = _world.fighters[i]
+		var view := _fighter_views[i]
+		view.position = f.render_position(alpha)
+		view.radius = f.radius
+		view.flash = f.health.hit_flash
+		view.visible = f.alive()
+		view.aim = f.facing
 
-	# Fading in cover is the only visible effect of concealment until there are
-	# opponents to hide from. Partial rather than invisible: you still need to
-	# see yourself to aim.
-	var hidden := _world.arena.conceals(_world.player.position)
-	_player_view.modulate.a = 0.55 if hidden else 1.0
-
-	for i in _dummy_views.size():
-		var dummy: Dummy = _world.dummies[i]
-		var view := _dummy_views[i]
-		view.position = dummy.position
-		view.radius = dummy.radius
-		view.flash = dummy.health.hit_flash
-		view.visible = dummy.alive()
+		if f == _world.player:
+			view.draw_strength = _controls.draw_strength
+			# Fade while in a bush, so concealment is legible to the person
+			# doing the concealing.
+			view.modulate.a = 0.55 if _world.arena.conceals(f.position) else 1.0
 
 		# Chip bar chases the real health rather than snapping to it.
-		var target := dummy.health.fraction()
+		var target := f.health.fraction()
 		if target > _chip[i]:
 			_chip[i] = target
 		else:
@@ -124,10 +124,10 @@ func _draw() -> void:
 	_terrain.draw_into(self, _camera.view_rect(get_viewport_rect().size))
 	_draw_aim_preview(alpha)
 
-	for i in _dummy_views.size():
-		var dummy: Dummy = _world.dummies[i]
-		if dummy.alive():
-			_draw_health_bar(dummy, _chip[i])
+	for i in _fighter_views.size():
+		var f: Fighter = _world.fighters[i]
+		if f.alive():
+			_draw_health_bar(f, _chip[i])
 
 	_draw_arrows(alpha)
 
@@ -203,11 +203,11 @@ func _draw_aim_preview(alpha: float) -> void:
 	)
 
 
-func _draw_health_bar(dummy: Dummy, chip: float) -> void:
+func _draw_health_bar(f: Fighter, chip: float) -> void:
 	# Sits just above the cat. Any further and it reads as a separate object
 	# floating in space rather than as that target's health.
-	var bar_width := dummy.radius * 1.6
-	var origin := dummy.position + Vector2(-bar_width * 0.5, -dummy.radius * 2.05)
+	var bar_width := f.radius * 1.6
+	var origin := f.position + Vector2(-bar_width * 0.5, -f.radius * 2.05)
 	draw_rect(Rect2(origin, Vector2(bar_width, 5.0)), Palette.HEALTH_BG)
 	draw_rect(Rect2(origin, Vector2(bar_width * chip, 5.0)), Color(1, 1, 1, 0.55))
-	draw_rect(Rect2(origin, Vector2(bar_width * dummy.health.fraction(), 5.0)), Palette.HEALTH)
+	draw_rect(Rect2(origin, Vector2(bar_width * f.health.fraction(), 5.0)), Palette.HEALTH)

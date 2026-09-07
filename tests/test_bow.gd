@@ -55,14 +55,23 @@ func test_full_draw_is_dead_straight() -> void:
 	)
 
 
-func test_snap_shot_is_weaker() -> void:
+## The snap multiplier is APPLIED, whatever it is set to — that is the invariant.
+##
+## It used to also assert the snap shot was weaker. That assertion encoded a
+## design decision rather than a property of the code, and the decision changed:
+## the audience is now a 5-year-old, auto-aim is the mechanic that makes the
+## game playable for them, and taxing it punished the one thing they can do.
+## Brawl Stars charges nothing for tap-to-auto-aim either. The multiplier stays
+## as a slider so the trade can be re-introduced by turning a dial rather than
+## by editing a test.
+func test_snap_multiplier_is_applied() -> void:
 	var bow := Bow.new()
 	var normal := bow.damage_for(0.5, false)
 	var snap := bow.damage_for(0.5, true)
-	_runner.check(snap < normal, _fail("snap shot trades damage for speed and aim assist"))
 	_runner.check_near(
 		snap, normal * Tuning.get_value("snap_damage_mult"), _fail("snap multiplier applied")
 	)
+	_runner.check(snap <= normal, _fail("snap is never STRONGER than an aimed shot"))
 
 
 func test_quiver_depletes_and_blocks() -> void:

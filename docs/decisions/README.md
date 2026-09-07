@@ -32,3 +32,4 @@ adapted: **Context → Decision → Consequences → Alternatives**.
 | [0010](0010-branch-per-feature.md) | Branch per feature, PR builds to the phone | Accepted |
 | [0011](0011-pages-from-a-branch.md) | Publish Pages from a branch | Accepted, supersedes part of 0006 |
 | [0012](0012-verify-inside-the-artifact.md) | Verify the artifact, not the process | Accepted |
+| [0013](0013-audience-is-a-family.md) | The audience is a family, not one adult | Accepted, supersedes the audience premise in 0006 |
