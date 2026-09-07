@@ -1,24 +1,34 @@
 name: build
 
 # This project is developed without a local machine. CI is not a safety net
-# bolted on beside a dev loop — it IS the dev loop. So a green run has to mean
-# more than "it compiled": it validates, then publishes to two channels.
+# bolted on beside a dev loop — it IS the dev loop. A green run therefore has to
+# mean more than "it compiled": it validates, then publishes to two channels.
 #
 #   Channel A (web)  -> GitHub Pages, ~2 min, no install. Iterate here.
-#   Channel B (apk)  -> a rolling "dev" prerelease with a stable URL. Truth.
+#   Channel B (apk)  -> a GitHub Release with a stable URL. The source of truth.
+#
+# Publishing targets differ by event:
+#   pull_request -> pr-<n> prerelease + a sticky comment, so a branch can be
+#                   played on the phone BEFORE it is merged.
+#   push to main -> the rolling `dev` release everyone bookmarks.
 
 on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
   push:
-    branches: [claude/godot-archer-arena, main]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: write
   pages: write
   id-token: write
+  pull-requests: write
 
+# Per-ref, so a new push supersedes an in-flight run for the same branch.
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -29,6 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       apk_name: ${{ steps.stamp.outputs.apk_name }}
+      short_sha: ${{ steps.stamp.outputs.short_sha }}
     steps:
       - uses: actions/checkout@v4
 
@@ -74,7 +85,8 @@ jobs:
           godot --headless --version
 
       # Stamps the commit into the build so the running app on the phone can
-      # identify itself. Without this, "which build is that?" is unanswerable.
+      # identify itself. With a shared web preview that can be overwritten by
+      # another branch's build, this is what tells you which build you are on.
       - name: Write build stamp
         id: stamp
         run: |
@@ -88,6 +100,7 @@ jobs:
           }
           EOF
           cat data/build_stamp.json
+          echo "short_sha=${SHORT}" >> "$GITHUB_OUTPUT"
           echo "apk_name=oogoog-${SHORT}.apk" >> "$GITHUB_OUTPUT"
 
       - name: Lint (gdtoolkit)
@@ -104,9 +117,8 @@ jobs:
       - name: Import resources
         run: godot --headless --path . --import
 
-      # Pure sim logic (draw curves, quiver economy, swept collision) verified
-      # without a display — the one form of correctness checking available when
-      # nobody involved can run the game locally.
+      # Pure sim logic verified without a display — the one form of correctness
+      # checking available when nobody involved can run the game locally.
       - name: Unit tests
         run: godot --headless --path . --script tools/run_tests.gd
 
@@ -114,17 +126,13 @@ jobs:
         run: ./tools/smoke_test.sh "$(command -v godot)" 300
 
       # The headless smoke test never calls _draw(), so without this the whole
-      # rendering path is unverified — a bad draw call would reach the phone as
-      # a black screen with nothing in CI to explain it. Runs the real scene
-      # under a virtual display and saves a PNG that can actually be looked at.
-      - name: Render test + screenshot
+      # rendering path is unverified. The combat capture additionally drives a
+      # real shot and captures on impact, exercising the feedback layer.
+      - name: Render tests + screenshots
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq xvfb libgl1-mesa-dri >/dev/null
           ./tools/render_test.sh "$(command -v godot)" 90 build/shot.png idle
-          # Combat capture drives a real shot and captures on impact, so the
-          # feedback layer (particles, numbers, rings, hitstop) is exercised
-          # rather than just the idle scene.
           ./tools/render_test.sh "$(command -v godot)" 240 build/combat.png combat
 
       - name: Export web (single-threaded)
@@ -182,26 +190,75 @@ jobs:
         with:
           path: build/web
 
-      - name: Upload screenshot artifact
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: screenshot
+          name: build-${{ steps.stamp.outputs.short_sha }}
           path: |
+            build/android/*.apk
             build/shot.png
             build/combat.png
           if-no-files-found: error
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk
-          path: build/android/*.apk
-          if-no-files-found: error
+      # ---- Publish: pull request ------------------------------------------
+      # Each PR gets its own tag, so two open PRs never fight over one release.
+      - name: Publish PR build
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.number }}
+        run: |
+          set -euo pipefail
+          TAG="pr-${PR}"
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            --title "PR #${PR} — ${{ steps.stamp.outputs.short_sha }}" \
+            --notes "Build for pull request #${PR} at \`${{ steps.stamp.outputs.short_sha }}\` (run #${GITHUB_RUN_NUMBER}). Not for merging — this tag is replaced on every push to the PR." \
+            --prerelease \
+            --target "${{ github.event.pull_request.head.sha }}" \
+            build/android/*.apk build/shot.png build/combat.png
 
-      # A single rolling prerelease means one stable URL to bookmark on the
-      # phone, instead of hunting for the newest run's artifacts each time.
+      - name: Comment APK link on the PR
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.number }}
+        run: |
+          set -euo pipefail
+          APK="${{ steps.stamp.outputs.apk_name }}"
+          URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/pr-${PR}/${APK}"
+          BODY=$(cat <<EOF
+          ### 📱 Build ready — \`${{ steps.stamp.outputs.short_sha }}\`
+
+          | | |
+          |---|---|
+          | **Install on phone** | [\`${APK}\`](${URL}) |
+          | **Play in browser** | https://dorbra.github.io/OogOog/ |
+          | **Screenshots** | [idle](https://github.com/${GITHUB_REPOSITORY}/releases/download/pr-${PR}/shot.png) · [combat](https://github.com/${GITHUB_REPOSITORY}/releases/download/pr-${PR}/combat.png) |
+
+          The web preview is a single shared environment, so it shows whichever
+          build deployed most recently. The commit hash in the in-game HUD tells
+          you what you are actually looking at.
+
+          ---
+          _Generated by [Claude Code](https://claude.ai/code)_
+          EOF
+          )
+          # One sticky comment per PR, edited in place, rather than a new comment
+          # on every push turning the thread into a wall of build noise.
+          EXISTING=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" \
+            --jq '.[] | select(.body | contains("📱 Build ready")) | .id' | head -1)
+          if [ -n "$EXISTING" ]; then
+            gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${EXISTING}" -f body="$BODY" >/dev/null
+            echo "updated comment $EXISTING"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR}/comments" -f body="$BODY" >/dev/null
+            echo "created new comment"
+          fi
+
+      # ---- Publish: main ---------------------------------------------------
       - name: Publish rolling dev release
-        if: github.ref == 'refs/heads/claude/godot-archer-arena' || github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -209,15 +266,22 @@ jobs:
           gh release delete dev --yes --cleanup-tag 2>/dev/null || true
           gh release create dev \
             --title "Dev build ${{ steps.stamp.outputs.apk_name }}" \
-            --notes "Latest build from \`${GITHUB_REF_NAME}\` (${GITHUB_SHA:0:7}), run #${GITHUB_RUN_NUMBER}.
+            --notes "Latest build from \`main\` (${{ steps.stamp.outputs.short_sha }}), run #${GITHUB_RUN_NUMBER}.
 
           Install the APK below on your phone. The browser build is published to this repo's GitHub Pages URL." \
             --prerelease \
             build/android/*.apk build/shot.png build/combat.png
 
+  # Pages is a SINGLE shared environment for the whole repo. Its own concurrency
+  # group with cancel-in-progress:false makes concurrent runs QUEUE rather than
+  # race — pushing one commit to two branches previously started two runs that
+  # both drove this deployment, and one of them failed.
   deploy-pages:
     needs: build
     runs-on: ubuntu-latest
+    concurrency:
+      group: pages-deploy
+      cancel-in-progress: false
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
