@@ -12,7 +12,7 @@ every build is produced by GitHub Actions.
 
 | Channel | Link | Loop | Use for |
 |---|---|---|---|
-| **Web** | GitHub Pages (see the repo's Pages URL) | ~2–3 min, just refresh | Movement, aim, feel, balance |
+| **Web** | GitHub Pages (see the repo's Pages URL) — **`main` only** | ~2–3 min, just refresh | Movement, aim, feel, balance |
 | **APK** | [`dev` release](../../releases/tag/dev) | ~5–8 min, download + install | Real performance, thermals, true touch latency |
 
 **Never judge performance in the browser** — the web build is single-threaded and
@@ -21,11 +21,9 @@ its timing does not match native. The APK is the source of truth.
 ### One-time setup
 
 1. **Enable GitHub Pages** (repo → Settings → Pages → Source: **GitHub Actions**).
-   To also get web previews from pull requests, set
-   Settings → Environments → **github-pages** → Deployment branches → **All
-   branches**. GitHub restricts this environment to the default branch by
-   default, so without it PR previews are refused and only `main` deploys.
-   The APK is unaffected either way.
+   The web build is published from `main` only — a repository has one Pages site
+   and its environment admits only the default branch, so a pull request cannot
+   deploy one. On a PR the APK *is* the preview, and it is the more truthful one.
 2. **Allow APK installs on the phone**: Settings → Apps → Chrome →
    *Install unknown apps* → allow. Android silently refuses the install otherwise.
 3. **Protect `main`** (Settings → Branches → add a rule for `main`):
@@ -33,9 +31,9 @@ its timing does not match native. The APK is the source of truth.
      unchecked**. There is no "0" to select — the count starts at 1 — and on a
      solo repo any approval requirement deadlocks, because GitHub forbids
      approving your own pull request.
-   - **Require status checks to pass** → **`build`**. Pick that specific check,
-     not the whole workflow: the `deploy-pages` preview can legitimately fail on
-     a PR branch (see below) and must not block a merge.
+   - **Require status checks to pass** → **`build`**. Pick that specific check
+     rather than the whole workflow, so adding a job later cannot silently
+     change what gates a merge.
    - Require branches to be up to date before merging.
    - Block force pushes.
 
@@ -55,6 +53,9 @@ feat/my-thing  ──PR──▶  main
 Opening a PR builds it and comments the APK link on the thread, so a change can
 be played on the phone **before** it is approved. That matters here more than in
 most projects: whether something feels right is not reviewable in a diff.
+
+A PR does **not** get a web preview — the single Pages site belongs to `main`.
+The APK on the PR is the thing to play.
 
 ---
 
@@ -110,12 +111,15 @@ src/
   main.gd             Thin orchestrator — builds the world, pumps input
   sim/                Simulation. Never reads Input, never touches a sprite.
                       input_command, sim_world, actor, bow, arrow, dummy, health
+  arena/              arena.gd — ASCII grid: walls, bushes, spawns, collision
   input/              touch_controls — multi-touch routed by FINGER INDEX
   view/               game_view, camera_rig, fx, hud, cat_view, terrain,
                       palette, safe_area
   debug/              tuning, debug_overlay, build_info
 assets/cats/          Hand-written SVG: tintable body + untinted face
 data/
+  arenas/arena_01.txt     the map, as text — edit it to change the level
+  arenas/legend.json      symbol meanings and cell size
   tuning_defaults.json    every feel parameter, live-adjustable on device
   build_stamp.json        overwritten by CI so the app identifies its own commit
 tests/                Run headless via tools/run_tests.gd

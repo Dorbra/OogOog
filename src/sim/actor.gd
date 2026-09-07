@@ -18,12 +18,12 @@ var prev_position: Vector2 = Vector2.ZERO
 var bow := Bow.new()
 
 
-func tick(cmd: InputCommand, delta: float, bounds: Rect2) -> void:
+func tick(cmd: InputCommand, delta: float, arena: Arena) -> void:
 	prev_position = position
 	radius = Tuning.get_value("player_radius")
 	bow.tick(delta)
 	_apply_movement(cmd.move, delta)
-	_integrate(delta, bounds)
+	_integrate(delta, arena)
 
 	if cmd.aim != Vector2.ZERO:
 		facing = cmd.aim
@@ -48,10 +48,18 @@ func _apply_movement(move: Vector2, delta: float) -> void:
 	velocity = velocity.move_toward(target, accel)
 
 
-func _integrate(delta: float, bounds: Rect2) -> void:
+func _integrate(delta: float, arena: Arena) -> void:
 	position += velocity * delta
-	position.x = clampf(position.x, bounds.position.x + radius, bounds.end.x - radius)
-	position.y = clampf(position.y, bounds.position.y + radius, bounds.end.y - radius)
+
+	# Walls, not just the arena rectangle. The border cells are solid, so this
+	# subsumes the old bounds clamp rather than needing both.
+	var resolved := arena.resolve_circle(position, radius)
+	if not resolved.is_equal_approx(position):
+		# Kill the velocity component pushing into the wall, otherwise the actor
+		# keeps accelerating into it and slides along at full speed on release.
+		var normal := (resolved - position).normalized()
+		velocity -= normal * minf(velocity.dot(normal), 0.0)
+		position = resolved
 
 
 ## Interpolated position for rendering. `alpha` is the fraction between the

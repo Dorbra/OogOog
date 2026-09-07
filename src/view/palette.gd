@@ -13,6 +13,13 @@ const GRASS_MID := Color("3f7d3a")
 const GRASS_LIGHT := Color("5aa34f")
 
 # Terrain features.
+#
+# Walls and bushes MUST NOT share a colour. The two behave completely
+# differently — a wall stops arrows, a bush only breaks line of sight — and a
+# player has to tell them apart at a glance, mid-fight, on a phone. Stone versus
+# foliage carries that distinction without needing a legend.
+const WALL := Color("6b6255")
+const WALL_TOP := Color("8a8072")
 const HEDGE := Color("24471f")
 const HEDGE_TOP := Color("2d5a2b")
 const PATH := Color("b8a179")

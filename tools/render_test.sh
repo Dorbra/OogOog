@@ -23,6 +23,13 @@ fi
 
 mkdir -p "$(dirname "$OUT")"
 
+# Import first, always. A render started while the .godot/ cache is still being
+# built fails with resource errors that vanish on the next run — a spurious red
+# that has now cost three debugging detours. Importing here makes the script
+# deterministic regardless of what ran before it.
+echo "==> ensuring import cache is current"
+"$GODOT" --headless --path . --import >/dev/null 2>&1 || true
+
 echo "==> rendering ${FRAMES} frames offscreen (mode: ${MODE})"
 LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a "$GODOT" \
   --path . --rendering-driver opengl3 \

@@ -19,7 +19,8 @@ func _fail(label: String) -> String:
 
 
 func _world() -> SimWorld:
-	return SimWorld.new(Rect2(0, 0, 2400, 1350))
+	# SimWorld now derives its bounds from the arena rather than taking a rect.
+	return SimWorld.new()
 
 
 func test_hit_emits_once_with_applied_damage() -> void:

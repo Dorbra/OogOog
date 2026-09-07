@@ -5,10 +5,9 @@ extends Node2D
 ## had grown to 237 lines doing all of it at once, and the juice pass would have
 ## roughly doubled that.
 ##
-## The world is deliberately larger than the screen; without that there is
-## nothing for the camera to zoom into.
-const WORLD_SIZE := Vector2(2400, 1350)
-
+## World size is no longer a constant here: it comes from the arena text file,
+## so a layout edit resizes the world without three systems needing to agree on
+## a number by hand.
 var world: SimWorld
 var controls: TouchControls
 
@@ -30,15 +29,16 @@ var _pending_snap := false
 
 
 func _ready() -> void:
-	world = SimWorld.new(Rect2(Vector2.ZERO, WORLD_SIZE))
-	_terrain = Terrain.new(Rect2(Vector2.ZERO, WORLD_SIZE))
+	var arena := Arena.new()
+	world = SimWorld.new(arena)
+	_terrain = Terrain.new(arena)
 
 	controls = TouchControls.new()
 	add_child(controls)
 	controls.shot_released.connect(_on_shot_released)
 
 	_camera = CameraRig.new()
-	_camera.world_size = WORLD_SIZE
+	_camera.world_size = arena.bounds().size
 	_camera.position = world.player.position
 	_camera.target_position = world.player.position
 	add_child(_camera)
