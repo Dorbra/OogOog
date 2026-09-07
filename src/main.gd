@@ -97,6 +97,10 @@ func _process(delta: float) -> void:
 	_camera.target_position = world.player.position
 	_camera.follow(delta, get_viewport_rect().size)
 
+	# LAN spike: publish where this player is, so other devices can draw them.
+	# The transport decides how often it actually transmits.
+	Net.set_local_position(world.player.position)
+
 	_hud.quiver = world.player.bow.quiver
 	_hud.capacity = world.player.bow.capacity()
 	_hud.draw_strength = controls.draw_strength

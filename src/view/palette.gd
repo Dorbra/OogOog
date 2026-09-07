@@ -35,6 +35,7 @@ const TUFT := Color("356b31")
 # Characters.
 const CAT_PLAYER := Color("e08a3c")  # ginger
 const CAT_ENEMY := Color("8b9199")  # grey
+const CAT_REMOTE := Color("6fa8dc")  # blue — another person, not a bot
 const SHADOW := Color(0.0, 0.0, 0.0, 0.28)
 
 # Gameplay elements — deliberately the warmest, brightest things on screen.

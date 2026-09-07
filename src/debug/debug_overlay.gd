@@ -15,6 +15,9 @@ var _panel: PanelContainer
 var _toggle: Button
 var _log_label: RichTextLabel
 var _info_label: Label
+var _net_label: Label
+var _host_list: VBoxContainer
+var _address_edit: LineEdit
 var _sliders: Dictionary = {}
 var _open := false
 

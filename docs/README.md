@@ -8,6 +8,7 @@ Start here.
 | **[GAME_DESIGN.md](GAME_DESIGN.md)** | What the game is, which mechanics serve that, what is planned, and what has been deliberately refused |
 | **[CICD.md](CICD.md)** | The pipeline, the eleven gates and what each one catches, how publishing works, and the incident log |
 | **[NO_PC_WORKFLOW.md](NO_PC_WORKFLOW.md)** | The constraint that shapes every other decision: there is no development machine |
+| **[LAN_SPIKE.md](LAN_SPIKE.md)** | M3.0 — the local-multiplayer experiment, how to run it on two phones, and what its four answers decide |
 | **[decisions/](decisions/)** | ADRs — one file per decision, with the reasoning, the cost, and what was rejected |
 
 Plus, at the repo root: **[CONTRIBUTING.md](../CONTRIBUTING.md)** for the branch
