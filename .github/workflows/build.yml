@@ -144,6 +144,13 @@ jobs:
           ./tools/render_test.sh "$(command -v godot)" 90 build/shot.png idle
           ./tools/render_test.sh "$(command -v godot)" 240 build/combat.png combat
 
+      # Everything above this line runs the project FROM SOURCE, where every data
+      # file is sitting on disk. That is exactly how a missing arena_01.txt
+      # reached a phone: .txt is not a "resource", so the export dropped it, and
+      # nothing here noticed because nothing here looks inside the artifact.
+      - name: Verify the exported pack contains its data files
+        run: ./tools/verify_pack.sh "$(command -v godot)" Web
+
       - name: Export web (single-threaded)
         run: |
           set -euo pipefail
@@ -193,6 +200,26 @@ jobs:
             "build/android/${{ steps.stamp.outputs.apk_name }}"
           ls -la build/android
           test -s "build/android/${{ steps.stamp.outputs.apk_name }}"
+
+      # Android is a SEPARATE export preset with its own filters, so verifying
+      # the web pack does not prove anything about the APK. Extracting rather
+      # than grepping the .apk directly, because the pack may be deflated inside
+      # the zip and a raw grep would silently find nothing and "pass".
+      - name: Verify the APK contains the arena
+        run: |
+          set -euo pipefail
+          APK="build/android/${{ steps.stamp.outputs.apk_name }}"
+          rm -rf /tmp/apkcheck && mkdir -p /tmp/apkcheck
+          unzip -o -q "$APK" -d /tmp/apkcheck
+          if grep -raq "data/arenas/arena_01.txt" /tmp/apkcheck; then
+            echo "arena is packaged in the APK"
+          else
+            echo "::error::arena_01.txt is not inside ${APK}."
+            echo "::error::The Android preset needs *.txt in its include_filter."
+            echo "::error::Shipping without it renders as a grey void — no walls,"
+            echo "::error::no spawns, world size zero."
+            exit 1
+          fi
 
       # A plain artifact, NOT actions/upload-pages-artifact. The publish-web job
       # pushes these files to a branch rather than handing them to the Pages
