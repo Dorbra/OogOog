@@ -3,8 +3,8 @@ extends RefCounted
 ## Owns the simulation and ticks it in a fixed order.
 ##
 ## Runs at a fixed 60 Hz from _physics_process. Nothing here reads Input or
-## touches a node — the caller feeds it an InputCommand and reads state back
-## out for rendering.
+## touches a node — the caller feeds it an InputCommand and reads state back out
+## for rendering.
 
 ## Typed events, emitted at the MOMENT something happens.
 ##
@@ -19,13 +19,17 @@ signal arrow_expired(position: Vector2)
 
 const ARROW_POOL_SIZE := 150
 
-var player := Actor.new()
-var dummies: Array[Dummy] = []
+## Two teams of this many. Six fighters is what a 3v3 living-room match is.
+const TEAM_SIZE := 3
+
+var player: Fighter
+var fighters: Array[Fighter] = []
 var arrows: Array[Arrow] = []
 var arena: Arena
 var bounds: Rect2 = Rect2(0, 0, 1280, 720)
 
 var _rng := RandomNumberGenerator.new()
+var _empty_cmd := InputCommand.new()
 
 
 ## The arena defines the world, not the caller. Bounds used to be a constant in
@@ -40,81 +44,125 @@ func _init(from_arena: Arena = null) -> void:
 	for i in ARROW_POOL_SIZE:
 		arrows[i] = Arrow.new()
 
-	_place_from_spawns()
+	_build_teams()
 
 
-## Spawn points come from the arena's `P` cells now, replacing the hardcoded
-## ring. The ring existed only because there was no map; with one, placement is
-## a level-design decision and belongs in the text file where it can be edited
-## and reviewed without touching code.
+## Two teams, drawn from the arena's `P` cells and CLUSTERED.
 ##
-## The player takes the spawn nearest the middle so the opening view is central,
-## and targets take the rest, farthest-first so the arena reads as populated
-## rather than crowded around one corner.
-func _place_from_spawns() -> void:
+## The first version simply sorted all nine spawns by x and handed the left half
+## to team 0. That put teammates at opposite corners: the idle screenshot showed
+## the player alone in a field with nobody else on screen, which is the wrong
+## opening for a 3v3 and would read as "the game is broken" to a 5-year-old.
+##
+## So each team takes an anchor spawn and its two nearest neighbours. Teams
+## start together, on opposite sides of the map, which reads instantly as two
+## sides and makes the opening seconds an approach rather than a scramble. It is
+## also deterministic, which the screenshot tests depend on.
+func _build_teams() -> void:
 	var points := arena.spawn_points()
-	var centre := bounds.get_center()
-
 	if points.is_empty():
 		push_warning("Arena has no spawn points; falling back to centre")
-		player.position = centre
-		player.prev_position = centre
-		return
+		points = [bounds.get_center()]
 
-	points.sort_custom(
-		func(a: Vector2, b: Vector2) -> bool:
-			return a.distance_squared_to(centre) < b.distance_squared_to(centre)
+	points.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
+
+	var team_a := _take_cluster(points, points[0])
+	var team_b := (
+		_take_cluster(points, points[points.size() - 1]) if not points.is_empty() else team_a
 	)
 
-	player.position = points[0]
-	player.prev_position = player.position
+	for team in 2:
+		var spots: Array[Vector2] = team_a if team == 0 else team_b
+		for i in TEAM_SIZE:
+			var f := Fighter.new()
+			f.team = team
+			f.spawn_point = spots[i % spots.size()]
+			f.position = f.spawn_point
+			f.prev_position = f.spawn_point
+			fighters.append(f)
 
-	for i in range(1, points.size()):
-		var d := Dummy.new()
-		d.position = points[i]
-		dummies.append(d)
+	# The local player is the first fighter on team 0. Everything else is driven
+	# by a controller, or by nobody at all.
+	player = fighters[0]
+
+
+## Removes and returns the TEAM_SIZE spawns closest to `anchor`.
+func _take_cluster(points: Array[Vector2], anchor: Vector2) -> Array[Vector2]:
+	points.sort_custom(
+		func(a: Vector2, b: Vector2) -> bool:
+			return a.distance_squared_to(anchor) < b.distance_squared_to(anchor)
+	)
+	var out: Array[Vector2] = []
+	for _i in mini(TEAM_SIZE, points.size()):
+		out.append(points.pop_front())
+	if out.is_empty():
+		out.append(anchor)
+	return out
+
+
+## Fighters on the other side, still alive. Used for aim assist and, from M3.1b,
+## by the bots.
+func enemies_of(team: int) -> Array[Fighter]:
+	var out: Array[Fighter] = []
+	for f in fighters:
+		if f.team != team and f.alive():
+			out.append(f)
+	return out
 
 
 func tick(cmd: InputCommand, delta: float) -> void:
-	player.tick(cmd, delta, arena)
+	for f in fighters:
+		# The player's command comes from thumbs; everyone else's from their
+		# controller, or an empty command when nobody is driving. That single
+		# branch is the entire difference between a player, a bot and a dummy.
+		var f_cmd := cmd
+		if f != player:
+			f_cmd = _command_for(f, delta)
+		f.tick(f_cmd, delta, arena)
 
-	for dummy in dummies:
-		dummy.tick(delta)
-
-	if cmd.fire:
-		_try_fire(cmd)
+		if f_cmd.fire and f.alive():
+			_try_fire(f, f_cmd)
 
 	_tick_arrows(delta)
 
 
-func _try_fire(cmd: InputCommand) -> void:
-	if not player.bow.consume():
+func _command_for(f: Fighter, delta: float) -> InputCommand:
+	if f.controller == null:
+		return _empty_cmd
+	return f.controller.think(f, self, delta)
+
+
+func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
+	if not shooter.bow.consume():
 		return
 
 	var dir := cmd.aim
 	if cmd.snap:
-		# The snap shot is the fast, weak, assisted option: it aims itself.
-		var target := nearest_dummy(player.position, Tuning.get_value("autoaim_radius"))
-		dir = (target.position - player.position).normalized() if target != null else player.facing
+		# The snap shot is the fast, assisted option: it aims itself.
+		var target := nearest_enemy(shooter.position, Tuning.get_value("autoaim_radius"), shooter)
+		dir = (
+			(target.position - shooter.position).normalized() if target != null else shooter.facing
+		)
 	if dir == Vector2.ZERO:
-		dir = player.facing
+		dir = shooter.facing
 
 	if not cmd.snap:
-		dir = _apply_aim_assist(dir)
+		dir = _apply_aim_assist(shooter, dir)
 
-	dir = player.bow.apply_deviation(dir, cmd.draw_strength, _rng)
+	dir = shooter.bow.apply_deviation(dir, cmd.draw_strength, _rng)
 
 	var arrow := _free_arrow()
 	if arrow == null:
 		return
 
-	var origin := player.position + dir * player.radius
+	var origin := shooter.position + dir * shooter.radius
 	arrow.launch(
 		origin,
 		dir,
-		player.bow.speed_for(cmd.draw_strength),
-		player.bow.damage_for(cmd.draw_strength, cmd.snap),
-		Tuning.get_value("arrow_lifetime")
+		shooter.bow.speed_for(cmd.draw_strength),
+		shooter.bow.damage_for(cmd.draw_strength, cmd.snap),
+		Tuning.get_value("arrow_lifetime"),
+		shooter.team
 	)
 	# A snap shot is never a "full draw" however long the thumb happened to rest.
 	arrow.full_draw = cmd.draw_strength >= 0.98 and not cmd.snap
@@ -125,18 +173,17 @@ func _try_fire(cmd: InputCommand) -> void:
 ## player aimed themselves erodes the whole point of committing to a draw. It
 ## exists as a slider so difficulty can be dialled in on the device rather than
 ## argued about here.
-func _apply_aim_assist(dir: Vector2) -> Vector2:
+func _apply_aim_assist(shooter: Fighter, dir: Vector2) -> Vector2:
 	var max_angle := deg_to_rad(Tuning.get_value("aim_assist_deg"))
 	if max_angle <= 0.0:
 		return dir
 
-	var target := nearest_dummy(player.position, Tuning.get_value("autoaim_radius"))
+	var target := nearest_enemy(shooter.position, Tuning.get_value("autoaim_radius"), shooter)
 	if target == null:
 		return dir
 
-	var to_target := (target.position - player.position).normalized()
-	var delta := dir.angle_to(to_target)
-	if absf(delta) > max_angle:
+	var to_target := (target.position - shooter.position).normalized()
+	if absf(dir.angle_to(to_target)) > max_angle:
 		return dir
 	return to_target
 
@@ -168,11 +215,16 @@ func _tick_arrows(delta: float) -> void:
 		if wall["hit"]:
 			arrow.position = wall["point"]
 
-		for dummy in dummies:
-			if not dummy.alive():
+		for f in fighters:
+			if not f.alive():
 				continue
-			if arrow.hits_circle(dummy.position, dummy.radius):
-				apply_damage(dummy, arrow.damage, arrow.velocity.normalized(), arrow.full_draw)
+			# Friendly fire is off. Checked here rather than in apply_damage so
+			# the arrow flies THROUGH a teammate rather than stopping dead on
+			# one, which would make your own team into cover.
+			if f.team == arrow.owner_team:
+				continue
+			if arrow.hits_circle(f.position, f.radius):
+				apply_damage(f, arrow.damage, arrow.velocity.normalized(), arrow.full_draw)
 				arrow.deactivate()
 				break
 
@@ -185,7 +237,7 @@ func _tick_arrows(delta: float) -> void:
 ##
 ## Keeping this as the only entry point is what guarantees the view never misses
 ## a hit: there is no second path that damages something quietly.
-func apply_damage(target: Dummy, amount: float, direction: Vector2, full_draw: bool) -> void:
+func apply_damage(target: Fighter, amount: float, direction: Vector2, full_draw: bool) -> void:
 	var applied := target.take_damage(amount)
 	if applied <= 0.0:
 		return
@@ -198,16 +250,17 @@ func apply_damage(target: Dummy, amount: float, direction: Vector2, full_draw: b
 		killed.emit(target.position, direction)
 
 
-func nearest_dummy(from: Vector2, max_range: float) -> Dummy:
-	var best: Dummy = null
+## Nearest living enemy of `seeker` within range, or null.
+func nearest_enemy(from: Vector2, max_range: float, seeker: Fighter) -> Fighter:
+	var best: Fighter = null
 	var best_dist := max_range * max_range
 
-	for dummy in dummies:
-		if not dummy.alive():
+	for f in fighters:
+		if f.team == seeker.team or not f.alive():
 			continue
-		var dist := from.distance_squared_to(dummy.position)
+		var dist := from.distance_squared_to(f.position)
 		if dist < best_dist:
 			best_dist = dist
-			best = dummy
+			best = f
 
 	return best

@@ -184,10 +184,10 @@ func test_world_spawns_player_and_targets_on_open_ground() -> void:
 	var w := SimWorld.new()
 	var c := w.arena.cell_at(w.player.position)
 	_runner.check(not w.arena.is_solid(c.x, c.y), _fail("player spawns on open ground"))
-	_runner.check(w.dummies.size() > 0, _fail("targets are placed"))
+	_runner.check(w.fighters.size() > 0, _fail("fighters are placed"))
 
 	var bad := 0
-	for d in w.dummies:
+	for d in w.fighters:
 		var dc := w.arena.cell_at(d.position)
 		if w.arena.is_solid(dc.x, dc.y):
 			bad += 1
