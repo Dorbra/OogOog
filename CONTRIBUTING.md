@@ -18,6 +18,11 @@ decisions here:
 `main` is protected and always releasable. All work happens on a branch and
 lands through a pull request.
 
+Protection is configured as: require a pull request, **Require approvals left
+unchecked** (there is no zero to choose, and any approval requirement deadlocks
+a solo repo since GitHub forbids self-approval), require the **`build`** status
+check, require branches up to date, block force pushes.
+
 | Prefix | For |
 |---|---|
 | `feat/` | New player-facing capability |

@@ -29,10 +29,15 @@ its timing does not match native. The APK is the source of truth.
 2. **Allow APK installs on the phone**: Settings → Apps → Chrome →
    *Install unknown apps* → allow. Android silently refuses the install otherwise.
 3. **Protect `main`** (Settings → Branches → add a rule for `main`):
-   require a pull request before merging with **0 required approvals** (GitHub
-   forbids approving your own PR, so 1 deadlocks a solo repo), require the
-   **`build`** status check, require branches to be up to date, and block force
-   pushes.
+   - **Require a pull request before merging**, and leave **Require approvals
+     unchecked**. There is no "0" to select — the count starts at 1 — and on a
+     solo repo any approval requirement deadlocks, because GitHub forbids
+     approving your own pull request.
+   - **Require status checks to pass** → **`build`**. Pick that specific check,
+     not the whole workflow: the `deploy-pages` preview can legitimately fail on
+     a PR branch (see below) and must not block a merge.
+   - Require branches to be up to date before merging.
+   - Block force pushes.
 
 ## How work lands
 
