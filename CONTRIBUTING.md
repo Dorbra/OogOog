@@ -45,6 +45,7 @@ gdlint  $(git ls-files '*.gd')                        # lint
 "$GODOT" --headless --path . --import                 # import cache
 "$GODOT" --headless --path . --script tools/run_tests.gd
 bash tests/test_publish_web.sh                        # CI publish logic
+bash tests/test_docs_links.sh                         # no dead doc links
 ./tools/verify_pack.sh "$GODOT" Web                   # does the EXPORT have the data?
 ./tools/smoke_test.sh  "$GODOT" 300                   # does it boot?
 ./tools/render_test.sh "$GODOT" 90  build/shot.png   idle
@@ -119,6 +120,23 @@ Two things about that script are deliberate and easy to break:
 The publish job also polls the live URL and fails if it never returns 200. The
 whole incident was a deploy reporting success while the site stayed stale, so
 "it pushed" is not allowed to count as "it published".
+
+## Documentation
+
+Engineering docs live in [`docs/`](docs/) — architecture, game design, CI/CD, and
+[ADRs](docs/decisions/) recording why each significant decision was made and what
+it cost.
+
+Two rules that matter:
+
+- **An ADR is immutable once merged.** Reversing a decision means a *new* ADR
+  that supersedes it; the old file stays. The history of what was believed, and
+  why, is the point.
+- **A change that invalidates a document updates it in the same PR.** Docs that
+  drift are worse than none, because they get believed.
+
+`tests/test_docs_links.sh` checks that every relative link resolves, including in
+files not yet committed.
 
 ## Testing conventions
 

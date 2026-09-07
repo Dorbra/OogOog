@@ -134,6 +134,13 @@ jobs:
       - name: Web publish logic tests
         run: bash tests/test_publish_web.sh
 
+      # Docs that lie are worse than no docs, because they get believed, and a
+      # dead relative link is the cheapest way for them to start lying.
+      # project.godot pointed at docs/NO_PC_WORKFLOW.md for several milestones
+      # while no such file existed.
+      - name: Docs link check
+        run: bash tests/test_docs_links.sh
+
       # The headless smoke test never calls _draw(), so without this the whole
       # rendering path is unverified. The combat capture additionally drives a
       # real shot and captures on impact, exercising the feedback layer.

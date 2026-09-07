@@ -160,6 +160,18 @@ simply become a third producer of `InputCommand`, alongside thumbs and bot AI.
 - **Pool anything spawned in combat** — arrows, particles, damage numbers.
   GDScript allocation churn shows up as frame hitches.
 
+## Documentation
+
+Full engineering documentation lives in **[docs/](docs/)**:
+
+| | |
+|---|---|
+| [Architecture](docs/ARCHITECTURE.md) | Layers, module map, the frame, invariants |
+| [Game design](docs/GAME_DESIGN.md) | Pillars, mechanics, roadmap, what was refused |
+| [CI/CD](docs/CICD.md) | Pipeline, the eleven gates, publishing, incident log |
+| [No-PC workflow](docs/NO_PC_WORKFLOW.md) | The constraint that shapes everything else |
+| [Decisions (ADRs)](docs/decisions/) | One file per decision: why, what it cost, what was rejected |
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for branch naming, the local gate to run
