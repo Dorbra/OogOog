@@ -14,6 +14,11 @@ const PARTICLE_CAP := 220
 const NUMBER_CAP := 40
 const RING_CAP := 24
 
+## The world this node is listening to, so an event's position can be compared
+## against the local player's. Read-only from here: nothing in Fx may change
+## simulation state.
+var _world: SimWorld = null
+
 var _particles: Array[Dictionary] = []
 var _numbers: Array[Dictionary] = []
 var _rings: Array[Dictionary] = []
@@ -40,27 +45,62 @@ func _ready() -> void:
 ## Wire to a SimWorld. Kept as one call so a second world (a replay, a test)
 ## cannot half-connect and silently lose events.
 func listen_to(world: SimWorld) -> void:
+	_world = world
 	world.hit.connect(_on_hit)
 	world.killed.connect(_on_killed)
 	world.fired.connect(_on_fired)
 
 
+## True when this happened to the LOCAL PLAYER rather than somewhere else.
+##
+## Hitstop dips Engine.time_scale GLOBALLY, and this node used to do it for every
+## hit in the match. With six fighters that meant the whole game micro-froze
+## roughly once a second because two bots traded shots somewhere off screen —
+## the single worst contributor to the game not feeling steady, and invisible
+## because the cause was never on screen.
+func _concerns_player(pos: Vector2) -> bool:
+	if _world == null:
+		return false
+	var near := Tuning.get_value("fighter_radius") * 1.5
+	return pos.distance_squared_to(_world.player.position) <= near * near
+
+
+## Roughly "is this within the camera's view", used to skip effects nobody can
+## see. Generous on purpose: culling a particle that WOULD have been visible is
+## a worse failure than spawning one that is not, so this errs outward.
+func _on_screen(pos: Vector2) -> bool:
+	# get_viewport_rect() needs a viewport, which a node built outside the scene
+	# tree — as the headless tests do — does not have.
+	if _world == null or not is_inside_tree():
+		return true
+	var zoom := maxf(Tuning.get_value("camera_zoom"), 0.01)
+	var half := get_viewport_rect().size / zoom * 0.5 + Vector2(140.0, 140.0)
+	var delta := (pos - _world.player.position).abs()
+	return delta.x <= half.x and delta.y <= half.y
+
+
 func _on_hit(pos: Vector2, dir: Vector2, damage: float, full_draw: bool) -> void:
-	spawn_burst(pos, -dir, 10 if full_draw else 6, Palette.ARROW)
-	spawn_ring(pos, 14.0, 52.0 if full_draw else 38.0)
-	spawn_number(pos, damage, full_draw)
-	hitstop(Tuning.get_value("hitstop_hit"))
+	if _on_screen(pos):
+		spawn_burst(pos, -dir, 10 if full_draw else 6, Palette.ARROW)
+		spawn_ring(pos, 14.0, 52.0 if full_draw else 38.0)
+		spawn_number(pos, damage, full_draw)
+	if _concerns_player(pos):
+		hitstop(Tuning.get_value("hitstop_hit"))
 
 
 func _on_killed(pos: Vector2, dir: Vector2, _scoring_team: int) -> void:
-	spawn_burst(pos, -dir, 22, Palette.CAT_ENEMY)
-	spawn_ring(pos, 20.0, 110.0)
-	hitstop(Tuning.get_value("hitstop_kill"))
+	if _on_screen(pos):
+		spawn_burst(pos, -dir, 22, Palette.CAT_ENEMY)
+		spawn_ring(pos, 20.0, 110.0)
+	if _concerns_player(pos):
+		hitstop(Tuning.get_value("hitstop_kill"))
 
 
 func _on_fired(pos: Vector2, dir: Vector2, draw_strength: float) -> void:
 	# A brief flash at the bow, scaled by commitment: a snap shot should not
 	# look like a fully drawn one.
+	if not _on_screen(pos):
+		return
 	spawn_burst(pos, dir, int(lerpf(2.0, 7.0, draw_strength)), Palette.ARROW_TIP)
 
 
@@ -70,6 +110,12 @@ func hitstop(seconds: float) -> void:
 	if seconds <= 0.0:
 		return
 	_hitstop_left = maxf(_hitstop_left, seconds)
+
+
+## Remaining hitstop, for tests. "The game did not freeze for somebody else's
+## fight" is the assertion this exists to make.
+func hitstop_left() -> float:
+	return _hitstop_left
 
 
 func spawn_burst(pos: Vector2, dir: Vector2, count: int, colour: Color) -> void:

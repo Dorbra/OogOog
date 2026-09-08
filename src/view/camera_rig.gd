@@ -26,18 +26,48 @@ func add_trauma(amount: float) -> void:
 	_trauma = clampf(_trauma + amount, 0.0, 1.0)
 
 
+## Current trauma, for tests. Read-only: "the camera is steady" is an assertion
+## worth being able to make, and it is the one nobody could make before.
+func trauma() -> float:
+	return _trauma
+
+
+## True when something happened to the LOCAL PLAYER rather than somewhere else
+## in the match.
+##
+## `target_position` is the player's position, kept current by main.gd, and every
+## sim event carries the position it happened at — so no signal needs to grow a
+## field for this.
+##
+## This check is the whole fix for "the screen doesn't stop shaking". SimWorld
+## emits hit/killed/fired for EVERY fighter anywhere on the map, and this node
+## used to add trauma for all of them. With six fighters, trauma arrived at about
+## 0.72/s against a decay of 1.9/s, so it settled at a permanent ~4 px jitter that
+## never reached zero — punctuated by hard shakes from kills happening off screen,
+## which look like the game glitching rather than like feedback.
+func _concerns_player(event_position: Vector2) -> bool:
+	var near := Tuning.get_value("fighter_radius") * 1.5
+	return event_position.distance_squared_to(target_position) <= near * near
+
+
 func listen_to(world: SimWorld) -> void:
 	world.hit.connect(
-		func(_p: Vector2, _d: Vector2, _dmg: float, full: bool) -> void:
-			add_trauma(Tuning.get_value("shake_hit") * (1.5 if full else 1.0))
+		func(p: Vector2, _d: Vector2, _dmg: float, full: bool) -> void:
+			if _concerns_player(p):
+				add_trauma(Tuning.get_value("shake_hit") * (1.5 if full else 1.0))
 	)
 	world.killed.connect(
-		func(_p: Vector2, _d: Vector2, _team: int) -> void:
-			add_trauma(Tuning.get_value("shake_kill"))
+		func(p: Vector2, _d: Vector2, _team: int) -> void:
+			if _concerns_player(p):
+				add_trauma(Tuning.get_value("shake_kill"))
 	)
+	# Firing shakes nothing by default (`shake_fire` is 0). Your own bowstring
+	# moving the camera is not something the reference game does, and at five
+	# arrows a second it was the largest single contributor to the jitter.
 	world.fired.connect(
-		func(_p: Vector2, _d: Vector2, draw: float) -> void:
-			add_trauma(Tuning.get_value("shake_fire") * draw)
+		func(p: Vector2, _d: Vector2, draw: float) -> void:
+			if _concerns_player(p):
+				add_trauma(Tuning.get_value("shake_fire") * draw)
 	)
 
 

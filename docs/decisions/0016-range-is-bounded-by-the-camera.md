@@ -58,6 +58,21 @@ This is [ADR-0012](0012-verify-inside-the-artifact.md) applied to balance: the
 artifact to inspect is the relationship between two numbers, and it had been
 wrong in a shipped build for two milestones because nobody was checking it.
 
+## Follow-up: the test measured the wrong thing (M3.2b)
+
+This decision held. Its test did not.
+
+`tests/test_screen_budget.gd` bounded `bot_sight_range` by **`reach × 1.5`** — an
+invented proxy — instead of by the screen. 280 px passed against a 200 px
+vertical half-view, so bots could acquire and shoot from off screen, and the very
+next playtest reported it in the same words as the one that prompted this ADR.
+
+The bound is the camera. Anything else is a number that happens to be nearby, and
+a gate measuring the wrong thing is worse than no gate because it is also
+reassuring. Fixed in [ADR-0018](0018-feedback-is-about-you.md)'s change, along
+with a range check in `BotController._aim_and_fire()` — which had none, and would
+fire at targets its arrows could not reach.
+
 ## Consequences
 
 **Good:**

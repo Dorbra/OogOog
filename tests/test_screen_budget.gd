@@ -72,9 +72,28 @@ func test_nothing_targets_beyond_what_the_bow_can_reach() -> void:
 		Tuning.get_value("autoaim_radius") <= _reach() * 1.15,
 		_fail("autoaim stays within bow range")
 	)
+
+
+## A bot may not acquire a target it cannot see on screen.
+##
+## This assertion existed and was WRONG: it bounded sight range by `reach * 1.5`,
+## an invented proxy, which let 280 px through against a 200 px vertical
+## half-view. The result was exactly the bug the file was written to prevent —
+## bots targeting and shooting from off screen — and the second playtest reported
+## it in the same words as the first.
+##
+## ADR-0016 says the bound is the CAMERA. Anything else is a number that happens
+## to be nearby, and a gate measuring the wrong thing is worse than no gate,
+## because it is also reassuring.
+func test_bots_cannot_see_you_from_off_screen() -> void:
+	var half := _visible_half()
+	var tightest := minf(half.x, half.y)
 	_runner.check(
-		Tuning.get_value("bot_sight_range") <= _reach() * 1.5,
-		_fail("bots do not stalk you from beyond their own range")
+		Tuning.get_value("bot_sight_range") <= tightest,
+		(
+			_fail("bot sight %.0f is within the %.0f px half-view")
+			% [Tuning.get_value("bot_sight_range"), tightest]
+		)
 	)
 
 

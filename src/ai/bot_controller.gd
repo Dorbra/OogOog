@@ -259,6 +259,19 @@ func _aim_and_fire(me: Fighter, world: SimWorld, target: Fighter, delta: float) 
 		_cmd.aim = aim
 		return
 
+	# Do not draw on something the arrow cannot physically reach.
+	#
+	# This was missing entirely, and it is the other half of "the bots shoot at
+	# me from out-of-screen": a bot could acquire a target well beyond its own
+	# range and fire anyway, because the only gate below is whether a wall is in
+	# the way. The arrows died in mid-air, so nothing was ever hit by them — the
+	# player just saw shots arriving from somewhere off screen for no reason.
+	var reach_now := me.bow.speed_for(1.0) * Tuning.get_value("arrow_lifetime")
+	if me.position.distance_to(target.position) > reach_now:
+		_draw_accum = 0.0
+		_cmd.aim = aim
+		return
+
 	# Rolled once per shot, at the start of the draw, and held. Re-rolling it
 	# every tick would average the error away over a 0.28 s draw AND make the
 	# bot's head visibly vibrate; committing to one wrong angle is how a person
