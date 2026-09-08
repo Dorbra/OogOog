@@ -36,7 +36,7 @@ var team_size: int = MAX_TEAM_SIZE
 
 ## Score, clock and phase. Owned by the simulation rather than the view,
 ## because "has anyone won" is a fact about the world and not about the screen
-## ([ADR-0016](../../docs/decisions/0016-the-match-is-sim-state.md)).
+## ([ADR-0017](../../docs/decisions/0017-the-match-is-sim-state.md)).
 var match_state := MatchState.new()
 
 var player: Fighter
