@@ -21,19 +21,19 @@
     "group": "Bow",
     "max": 90.0,
     "min": 6.0,
-    "value": 38.0
+    "value": 47.0
   },
   "arrow_lifetime": {
     "group": "Bow",
     "max": 5.0,
     "min": 0.2,
-    "value": 0.25
+    "value": 0.29
   },
   "arrow_width": {
     "group": "Bow",
     "max": 16.0,
     "min": 1.0,
-    "value": 7.0
+    "value": 9.0
   },
   "auto_repeat": {
     "group": "Bow",
@@ -45,7 +45,7 @@
     "group": "Aim assist",
     "max": 3000.0,
     "min": 100.0,
-    "value": 210.0
+    "value": 235.0
   },
   "bot_aim_error_deg": {
     "group": "Bots",
@@ -75,7 +75,7 @@
     "group": "Bots",
     "max": 900.0,
     "min": 60.0,
-    "value": 150.0
+    "value": 170.0
   },
   "bot_reaction_time": {
     "group": "Bots",
@@ -99,7 +99,7 @@
     "group": "Bots",
     "max": 2000.0,
     "min": 100.0,
-    "value": 280.0
+    "value": 230.0
   },
   "bot_skill": {
     "group": "Bots",
@@ -135,7 +135,7 @@
     "group": "Camera",
     "max": 4.0,
     "min": 0.8,
-    "value": 1.8
+    "value": 1.45
   },
   "decor_density": {
     "group": "Art",
@@ -327,31 +327,31 @@
     "group": "Feel",
     "max": 8.0,
     "min": 0.2,
-    "value": 1.9
+    "value": 3.0
   },
   "shake_fire": {
     "group": "Feel",
     "max": 1.0,
     "min": 0.0,
-    "value": 0.1
+    "value": 0.0
   },
   "shake_hit": {
     "group": "Feel",
     "max": 1.0,
     "min": 0.0,
-    "value": 0.32
+    "value": 0.18
   },
   "shake_kill": {
     "group": "Feel",
     "max": 1.0,
     "min": 0.0,
-    "value": 0.65
+    "value": 0.3
   },
   "shake_max_offset": {
     "group": "Feel",
     "max": 90.0,
     "min": 0.0,
-    "value": 26.0
+    "value": 14.0
   },
   "snap_damage_mult": {
     "group": "Aim assist",

@@ -145,16 +145,19 @@ so the other model stays available.
 | | Min draw | Full draw |
 |---|---|---|
 | Arrow speed | 480 px/s | 780 px/s |
-| Reach (speed × lifetime) | 120 px | 195 px |
+| Reach (speed × lifetime) | 139 px | 226 px |
 | Damage | 10 | 28 |
 | Max deviation | 8° | 0° |
 
 Full draw takes `draw_time_full` = 0.45 s. A full-draw hit is nearly 3× a rushed
 one and flies dead straight, which is the entire argument for committing.
 
-**Reach is not a free parameter.** 195 px is the shortest half-axis of what the
-camera shows, and [ADR-0016](decisions/0016-range-is-bounded-by-the-camera.md)
-holds it there: if something can hit you, you can see it. The first 3v3 playtest
+**Reach is not a free parameter.** 226 px sits inside the 248 px shortest
+half-axis of what the camera shows, and
+[ADR-0016](decisions/0016-range-is-bounded-by-the-camera.md) holds it there: if
+something can hit you, you can see it. **So does bot sight range** — that bound
+was missing at first, and bots shot from off screen for a whole milestone
+because the test used a proxy instead of the screen. The first 3v3 playtest
 was *"the bots just shot at me from out-of-screen"*, and measurement agreed —
 79% of the enemies in range to hit the player were off screen. It is now 0%, and
 a test fails if that changes.
@@ -162,6 +165,21 @@ a test fails if that changes.
 **Time to kill: 200 hp ÷ 28 = about 7 full-draw hits**, up from 3.3. With three
 enemies able to focus one player, 3.3 hits was the "dead in a second" the same
 playtest reported.
+
+### The camera: steady, and framed like the reference game
+
+| | |
+|---|---|
+| Zoom | 1.45 — you see 883 × 497 of the world |
+| A cat on screen | 84 px, 11.7% of screen height |
+| Characters visible vertically | **8.6** (it was 3.8) |
+
+**The camera does not move unless something happens to you.** Shake and hitstop
+fire only when the local player is hit or killed, never for the other five
+fighters' fights — [ADR-0018](decisions/0018-feedback-is-about-you.md). Firing
+your own bow shakes nothing at all. This was a real defect, not a taste
+preference: the screen previously never stopped jittering and the whole game
+micro-froze about once a second for events happening off screen.
 
 ### The match: two minutes, first to six
 
