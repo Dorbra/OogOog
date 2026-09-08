@@ -58,7 +58,7 @@ func test_kill_emits_once_and_not_again_while_dead() -> void:
 	target.health.current = 5.0
 
 	var kills: Array = []
-	w.killed.connect(func(_p, _d): kills.append(true))
+	w.killed.connect(func(_p, _d, _team): kills.append(true))
 
 	w.apply_damage(target, 50.0, Vector2.RIGHT, false)
 	_runner.check(kills.size() == 1, _fail("kill emits on the fatal blow"))

@@ -11,7 +11,7 @@ extends SceneTree
 ## pass from unverifiable-without-a-phone into something checkable locally.
 ##
 ## Run: xvfb-run -a godot --path . --rendering-driver opengl3 \
-##          --script tools/screenshot.gd -- <frames> <out.png> [idle|combat]
+##          --script tools/screenshot.gd -- <frames> <out.png> [idle|combat|results|setup]
 
 const DEFAULT_FRAMES := 90
 const DEFAULT_OUT := "res://build/shot.png"
@@ -55,6 +55,11 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 	# map from the first tick, so a live roster would make even the idle frame
 	# depend on how long the container took to boot.
 	_disarm_bots(main.get("world"))
+
+	# The game opens on the setup screen, where nothing simulates. Every capture
+	# would otherwise be a picture of a menu — including the combat one, which
+	# would then time out having never fired a shot.
+	_force_phase(main.get("world"), mode)
 
 	if mode == "combat":
 		var world = main.get("world")
@@ -102,6 +107,41 @@ func _tuned(key: String, fallback: float) -> float:
 		push_warning("screenshot: Tuning autoload missing, using fallback for '%s'" % key)
 		return fallback
 	return node.get_value(key)
+
+
+## Puts the match into the phase this capture needs.
+##
+## `results` fakes a finished match rather than playing one out: a real one takes
+## two minutes of wall time and lands on whatever score the bots happened to
+## produce, which is neither fast nor repeatable. The screen being tested is the
+## drawing, and the drawing only reads `winner` and `scores`.
+func _force_phase(world, mode: String) -> void:
+	if world == null:
+		return
+	var state = world.match_state
+	if mode == "results":
+		state.phase = 3  # MatchState.Phase.OVER
+		state.winner = 0
+		# Element-wise: MatchState.scores is Array[int], and assigning an
+		# untyped literal to it from this dynamically-typed script is refused
+		# at runtime.
+		state.scores[0] = 4
+		state.scores[1] = 2
+		print("screenshot: staged a finished match, team 0 wins 4-2")
+		return
+
+	if mode == "setup":
+		# The screen a five-year-old has to get past before they can play, and
+		# the only one that cannot be checked any other way from here.
+		state.phase = 0  # MatchState.Phase.SETUP
+		print("screenshot: holding the setup screen")
+		return
+
+	state.phase = 2  # MatchState.Phase.LIVE
+	state.scores[0] = 2
+	state.scores[1] = 1
+	state.elapsed = 45.0
+	print("screenshot: forced the match live so the world actually simulates")
 
 
 ## Takes every bot off the controls, so a render captures a staged scene rather

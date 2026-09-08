@@ -28,7 +28,7 @@ load-bearing for a project where nobody can run the game locally
 
 Three consequences worth stating plainly:
 
-- **The sim is unit-testable headless.** 297 assertions run in a few seconds
+- **The sim is unit-testable headless.** 360 assertions run in a few seconds
   with no display. That is the only correctness signal available to a project
   with no local machine.
 - **Bots are not a special case.** A bot is a third thing that produces an
@@ -48,6 +48,7 @@ Three consequences worth stating plainly:
 | `src/sim/` | Simulation | `Tuning`, `Arena` | `input_command`, `sim_world`, `fighter`, `bow`, `arrow`, `health` |
 | `src/arena/` | World data | `Tuning` | `arena.gd` — ASCII grid, collision, spawns |
 | `src/input/` | Producer | `Tuning`, Godot `Input` | `touch_controls.gd` |
+| `src/sim/` also holds `match_state.gd` | Simulation | `Tuning` | Phases, score, clock and the win condition — see [ADR-0017](decisions/0017-the-match-is-sim-state.md) |
 | `src/ai/` | Producer | `src/sim/`, `src/arena/`, `Tuning` | `bot_controller.gd` — FSM and difficulty; `grid_path.gd` — A* over the arena grid |
 | `src/view/` | Presentation | everything | `game_view`, `camera_rig`, `fx`, `hud`, `cat_view`, `terrain`, `palette`, `safe_area` |
 | `src/debug/` | Tooling | everything | `tuning`, `debug_overlay`, `build_info` |
@@ -297,8 +298,8 @@ Two non-obvious details:
 
 | Debt | Cost today | Where it gets paid |
 |---|---|---|
-| No score, timer or win condition | A fight has no end — bots fight forever and nobody wins | `feat/match-loop` |
-| Team size is a `bot_team_size` slider, not a pre-match screen | 1v1/2v2/3v3 is reachable only from DBG, which a 5-year-old cannot use | `feat/match-loop`, alongside the countdown and results UI |
+| The smoke test boots into the setup screen, where nothing simulates | It covers less than it did; live-sim coverage moved to the render captures, which force `Phase.LIVE` | Unclaimed — worth a flag that starts a match, if the boot test is ever asked to do more than catch a crash |
+| Sudden death has no clock of its own | A tie leans on kill rate, which is a slider. Pinned by a liveness test rather than left to chance | Unclaimed |
 | `BotController._nearest_cover()` scans every open cell, casting a ray each | Negligible on 24×14; linear in arena area | Unclaimed — revisit if arenas grow |
 | `Tuning.get_value()` called per-tick at ~50 sites | Dictionary lookup in hot paths | `chore/tech-debt` — cache on the `changed` signal |
 | `SimWorld._free_arrow()` is a linear scan of 150 | O(n) per shot | `chore/tech-debt` — free list |

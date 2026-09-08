@@ -502,6 +502,12 @@ func test_a_full_3v3_actually_produces_a_fight() -> void:
 	w.fired.connect(func(_p: Vector2, _d: Vector2, _s: float) -> void: shots.append(1))
 	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float, _f: bool) -> void: hits.append(1))
 
+	# The match has to be started now: SimWorld does not tick fighters outside
+	# MatchState.Phase.LIVE. That this test failed the moment the phase gate
+	# landed is the gate working — a world that simulates during a countdown
+	# would have sailed through unchanged.
+	w.match_state.phase = MatchState.Phase.LIVE
+
 	var idle := InputCommand.new()
 	for _i in 1800:
 		w.tick(idle, DT)
