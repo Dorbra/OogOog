@@ -47,6 +47,78 @@
     "min": 100.0,
     "value": 700.0
   },
+  "bot_aim_error_deg": {
+    "group": "Bots",
+    "max": 45.0,
+    "min": 0.0,
+    "value": 18.0
+  },
+  "bot_ambush_range": {
+    "group": "Bots",
+    "max": 900.0,
+    "min": 60.0,
+    "value": 320.0
+  },
+  "bot_cover_skill_gate": {
+    "group": "Bots",
+    "max": 1.0,
+    "min": 0.0,
+    "value": 0.5
+  },
+  "bot_lead_factor": {
+    "group": "Bots",
+    "max": 1.5,
+    "min": 0.0,
+    "value": 1.0
+  },
+  "bot_preferred_range": {
+    "group": "Bots",
+    "max": 900.0,
+    "min": 60.0,
+    "value": 380.0
+  },
+  "bot_reaction_time": {
+    "group": "Bots",
+    "max": 2.0,
+    "min": 0.0,
+    "value": 0.6
+  },
+  "bot_repath_interval": {
+    "group": "Bots",
+    "max": 2.0,
+    "min": 0.05,
+    "value": 0.4
+  },
+  "bot_retreat_health": {
+    "group": "Bots",
+    "max": 1.0,
+    "min": 0.0,
+    "value": 0.3
+  },
+  "bot_sight_range": {
+    "group": "Bots",
+    "max": 2000.0,
+    "min": 100.0,
+    "value": 1200.0
+  },
+  "bot_skill": {
+    "group": "Bots",
+    "max": 1.0,
+    "min": 0.0,
+    "value": 0.5
+  },
+  "bot_strafe_flip_time": {
+    "group": "Bots",
+    "max": 5.0,
+    "min": 0.1,
+    "value": 1.2
+  },
+  "bot_team_size": {
+    "group": "Bots",
+    "max": 3.0,
+    "min": 1.0,
+    "value": 3.0
+  },
   "bow_size": {
     "group": "Art",
     "max": 50.0,
@@ -214,6 +286,18 @@
     "max": 1.0,
     "min": 0.0,
     "value": 1.0
+  },
+  "reveal_radius": {
+    "group": "Cover",
+    "max": 400.0,
+    "min": 0.0,
+    "value": 95.0
+  },
+  "reveal_time": {
+    "group": "Cover",
+    "max": 5.0,
+    "min": 0.0,
+    "value": 1.2
   },
   "shadow_alpha": {
     "group": "Art",

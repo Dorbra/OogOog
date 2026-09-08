@@ -33,3 +33,5 @@ adapted: **Context → Decision → Consequences → Alternatives**.
 | [0011](0011-pages-from-a-branch.md) | Publish Pages from a branch | Accepted, supersedes part of 0006 |
 | [0012](0012-verify-inside-the-artifact.md) | Verify the artifact, not the process | Accepted |
 | [0013](0013-audience-is-a-family.md) | The audience is a family, not one adult | Accepted, supersedes the audience premise in 0006 |
+| [0014](0014-a-star-not-navigation-agent.md) | Bots produce InputCommands; A* over the grid | Accepted |
+| [0015](0015-concealment-is-a-sim-rule.md) | Concealment is a simulation rule, not a fade | Accepted |

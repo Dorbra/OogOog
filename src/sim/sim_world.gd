@@ -19,8 +19,16 @@ signal arrow_expired(position: Vector2)
 
 const ARROW_POOL_SIZE := 150
 
-## Two teams of this many. Six fighters is what a 3v3 living-room match is.
-const TEAM_SIZE := 3
+## Upper bound on a side, and the number of spawn cells a team takes. The actual
+## side size is the `bot_team_size` slider; this only caps what the arena's `P`
+## cells can support.
+const MAX_TEAM_SIZE := 3
+
+## How many fighters a side actually fields this match, resolved once at build
+## time. A slider rather than a constant so 1v1, 2v2 and 3v3 are all reachable
+## on the device — the icon-based picker a five-year-old can use belongs with
+## the countdown and results screens in feat/match-loop, not here.
+var team_size: int = MAX_TEAM_SIZE
 
 var player: Fighter
 var fighters: Array[Fighter] = []
@@ -71,9 +79,11 @@ func _build_teams() -> void:
 		_take_cluster(points, points[points.size() - 1]) if not points.is_empty() else team_a
 	)
 
+	team_size = clampi(int(Tuning.get_value("bot_team_size")), 1, MAX_TEAM_SIZE)
+
 	for team in 2:
 		var spots: Array[Vector2] = team_a if team == 0 else team_b
-		for i in TEAM_SIZE:
+		for i in team_size:
 			var f := Fighter.new()
 			f.team = team
 			f.spawn_point = spots[i % spots.size()]
@@ -85,23 +95,29 @@ func _build_teams() -> void:
 	# by a controller, or by nobody at all.
 	player = fighters[0]
 
+	# Every empty slot is a bot, so the match has the same shape whether one
+	# person is playing or (from M3.3) three are. Seeded by index rather than
+	# randomised: two bots sharing an RNG stream would strafe in lockstep, and a
+	# seeded one keeps the headless tests repeatable.
+	for i in range(1, fighters.size()):
+		fighters[i].controller = BotController.new(i * 7919)
 
-## Removes and returns the TEAM_SIZE spawns closest to `anchor`.
+
+## Removes and returns the MAX_TEAM_SIZE spawns closest to `anchor`.
 func _take_cluster(points: Array[Vector2], anchor: Vector2) -> Array[Vector2]:
 	points.sort_custom(
 		func(a: Vector2, b: Vector2) -> bool:
 			return a.distance_squared_to(anchor) < b.distance_squared_to(anchor)
 	)
 	var out: Array[Vector2] = []
-	for _i in mini(TEAM_SIZE, points.size()):
+	for _i in mini(MAX_TEAM_SIZE, points.size()):
 		out.append(points.pop_front())
 	if out.is_empty():
 		out.append(anchor)
 	return out
 
 
-## Fighters on the other side, still alive. Used for aim assist and, from M3.1b,
-## by the bots.
+## Fighters on the other side, still alive.
 func enemies_of(team: int) -> Array[Fighter]:
 	var out: Array[Fighter] = []
 	for f in fighters:
@@ -139,7 +155,9 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 	var dir := cmd.aim
 	if cmd.snap:
 		# The snap shot is the fast, assisted option: it aims itself.
-		var target := nearest_enemy(shooter.position, Tuning.get_value("autoaim_radius"), shooter)
+		var target := nearest_visible_enemy(
+			shooter.position, Tuning.get_value("autoaim_radius"), shooter
+		)
 		dir = (
 			(target.position - shooter.position).normalized() if target != null else shooter.facing
 		)
@@ -166,6 +184,9 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 	)
 	# A snap shot is never a "full draw" however long the thumb happened to rest.
 	arrow.full_draw = cmd.draw_strength >= 0.98 and not cmd.snap
+	# Shooting gives you away. Without this an ambusher in a bush is permanently
+	# invisible while killing people, which is not cover — it is a cheat.
+	shooter.reveal_timer = Tuning.get_value("reveal_time")
 	fired.emit(origin, dir, cmd.draw_strength)
 
 
@@ -178,7 +199,9 @@ func _apply_aim_assist(shooter: Fighter, dir: Vector2) -> Vector2:
 	if max_angle <= 0.0:
 		return dir
 
-	var target := nearest_enemy(shooter.position, Tuning.get_value("autoaim_radius"), shooter)
+	var target := nearest_visible_enemy(
+		shooter.position, Tuning.get_value("autoaim_radius"), shooter
+	)
 	if target == null:
 		return dir
 
@@ -248,6 +271,57 @@ func apply_damage(target: Fighter, amount: float, direction: Vector2, full_draw:
 	if target.health.died_this_tick:
 		target.health.died_this_tick = false
 		killed.emit(target.position, direction)
+
+
+## Can a fighter standing at `from` see `target`?
+##
+## The single rule both the bots and the view read, so "hidden" cannot mean one
+## thing to the AI and another on screen. Until this existed, Arena.conceals()
+## had exactly one caller — a 55% alpha fade — and bushes hid nothing from
+## anybody. Concealment being cosmetic is what made ambush impossible.
+##
+## Order matters: the two reveals are checked BEFORE concealment, because both
+## are meant to defeat it.
+func can_see(from: Vector2, target: Fighter) -> bool:
+	if not target.alive():
+		return false
+	if target.reveal_timer > 0.0:
+		return true
+	if from.distance_squared_to(target.position) <= _reveal_radius_squared():
+		return true
+	if arena.conceals(target.position):
+		return false
+	return not arena.cast_segment(from, target.position)["hit"]
+
+
+func _reveal_radius_squared() -> float:
+	var r := Tuning.get_value("reveal_radius")
+	return r * r
+
+
+## Nearest enemy of `seeker` that `seeker` can actually see, or null.
+##
+## Deliberately a second function rather than line-of-sight added to
+## nearest_enemy(): that one is called by tools/screenshot.gd and asserted
+## non-null by test_nearest_enemy_never_returns_a_teammate, and team spawns sit
+## across the map behind stone — so filtering it here would break a test for
+## reasons that have nothing to do with what it is testing.
+func nearest_visible_enemy(from: Vector2, max_range: float, seeker: Fighter) -> Fighter:
+	var best: Fighter = null
+	var best_dist := max_range * max_range
+
+	for f in fighters:
+		if f.team == seeker.team or not f.alive():
+			continue
+		var dist := from.distance_squared_to(f.position)
+		if dist >= best_dist:
+			continue
+		if not can_see(from, f):
+			continue
+		best_dist = dist
+		best = f
+
+	return best
 
 
 ## Nearest living enemy of `seeker` within range, or null.

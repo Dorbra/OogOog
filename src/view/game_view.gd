@@ -118,13 +118,18 @@ func _sync_views(delta: float) -> void:
 		view.position = f.render_position(alpha)
 		view.radius = f.radius
 		view.flash = f.health.hit_flash
-		view.visible = f.alive()
 		view.aim = f.facing
+		view.visible = f.alive() and _is_shown(f)
 
 		if f == _world.player:
 			view.draw_strength = _controls.draw_strength
-			# Fade while in a bush, so concealment is legible to the person
-			# doing the concealing.
+
+		# Your own side fades in cover; an enemy in cover is not drawn at all
+		# (see _is_shown). Fading a teammate rather than hiding them is
+		# deliberate: losing track of your own team is not a mechanic, it is
+		# just confusing, and in a game for a five-year-old that matters more
+		# than the symmetry does.
+		if f.team == _world.player.team:
 			view.modulate.a = 0.55 if _world.arena.conceals(f.position) else 1.0
 
 		# Chip bar chases the real health rather than snapping to it.
@@ -133,6 +138,17 @@ func _sync_views(delta: float) -> void:
 			_chip[i] = target
 		else:
 			_chip[i] = maxf(_chip[i] - delta * 0.9, target)
+
+
+## Whether the local player can see this fighter at all.
+##
+## The view asks the SIMULATION rather than reading Arena.conceals() itself, so
+## the bots and the screen agree on who is hidden. A cat the AI has lost track
+## of but that you can still see would make cover unreadable.
+func _is_shown(f: Fighter) -> bool:
+	if f.team == _world.player.team:
+		return true
+	return _world.can_see(_world.player.position, f)
 
 
 func _track_trails() -> void:
@@ -156,7 +172,9 @@ func _draw() -> void:
 
 	for i in _fighter_views.size():
 		var f: Fighter = _world.fighters[i]
-		if f.alive():
+		# A health bar floating over an empty bush would give away the exact
+		# thing the bush is hiding, so this asks the same question the sprite does.
+		if f.alive() and _is_shown(f):
 			_draw_health_bar(f, _chip[i])
 
 	_draw_arrows(alpha)

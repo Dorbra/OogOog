@@ -51,6 +51,11 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 	# and silently skipping it.
 	await process_frame
 
+	# Both captures, not just the combat one: bots walk toward the middle of the
+	# map from the first tick, so a live roster would make even the idle frame
+	# depend on how long the container took to boot.
+	_disarm_bots(main.get("world"))
+
 	if mode == "combat":
 		var world = main.get("world")
 		if world == null:
@@ -83,6 +88,30 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 		push_warning("screenshot: no hit landed in %d frames, capturing anyway" % frames)
 	await RenderingServer.frame_post_draw
 	_save(out)
+
+
+## Takes every bot off the controls, so a render captures a staged scene rather
+## than a race.
+##
+## The combat capture is this project's most valuable gate — it is the only
+## thing that looks at the feedback layer without a phone — and a gate that
+## sometimes fails for reasons unrelated to the code is worse than no gate at
+## all (ADR-0012). Six fighters manoeuvring and shooting would make the frame a
+## coin toss.
+##
+## This needs no bot-side "passive" flag: a null controller already means nobody
+## is driving, SimWorld._command_for() already returns the empty command for it,
+## and test_a_fighter_with_no_controller_stands_still already pins that. The
+## practice dummy behaviour never went away — it just stopped being a type.
+func _disarm_bots(world) -> void:
+	if world == null:
+		return
+	var disarmed := 0
+	for f in world.fighters:
+		if f.controller != null:
+			f.controller = null
+			disarmed += 1
+	print("screenshot: disarmed %d bot(s) for a deterministic capture" % disarmed)
 
 
 ## Fires at a target and captures shortly after impact, so the frame contains

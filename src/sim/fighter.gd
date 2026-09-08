@@ -41,6 +41,12 @@ var controller: Variant = null
 
 var respawn_timer: float = 0.0
 
+## Counts down after firing. While it is above zero this fighter is visible even
+## from inside a bush: loosing an arrow gives your position away, which is what
+## stops an ambusher from sitting in cover killing people with impunity.
+## SimWorld.can_see() is the only reader.
+var reveal_timer: float = 0.0
+
 
 func alive() -> bool:
 	return health.alive()
@@ -51,6 +57,9 @@ func tick(cmd: InputCommand, delta: float, arena: Arena) -> void:
 	radius = Tuning.get_value("fighter_radius")
 	health.set_maximum(Tuning.get_value("fighter_health"))
 	health.tick(delta)
+	# Ahead of the death check on purpose: a corpse should stop being "revealed"
+	# rather than respawning still lit up from its last shot.
+	reveal_timer = maxf(0.0, reveal_timer - delta)
 
 	if not alive():
 		_tick_dead(delta)
@@ -82,6 +91,7 @@ func respawn() -> void:
 	velocity = Vector2.ZERO
 	position = spawn_point
 	prev_position = spawn_point
+	reveal_timer = 0.0
 	bow = Bow.new()
 
 
