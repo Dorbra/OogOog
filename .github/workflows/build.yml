@@ -16,7 +16,15 @@ name: build
 on:
   pull_request:
     branches: [main]
-    types: [opened, synchronize, reopened]
+    # `edited` is here for one specific case: RETARGETING a PR. The trigger is
+    # scoped to PRs against main, so a PR opened against another branch — a
+    # stacked one, say — gets no run at all, and then gets no run when it is
+    # retargeted either, because retargeting is an `edited` event rather than a
+    # `synchronize`. That leaves a PR with no validation, no APK and no web
+    # preview, which in a project with no local machine means it cannot be
+    # reviewed in the only way that counts. The job below filters `edited` down
+    # to base changes so a typo in a description does not cost a build.
+    types: [opened, synchronize, reopened, edited]
   push:
     branches: [main]
   workflow_dispatch:
@@ -38,6 +46,12 @@ env:
 
 jobs:
   build:
+    # Every event except `edited`, and `edited` only when the base branch
+    # actually changed. github.event.changes.base is present on exactly that.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.action != 'edited' ||
+      github.event.changes.base != null
     runs-on: ubuntu-latest
     outputs:
       apk_name: ${{ steps.stamp.outputs.apk_name }}

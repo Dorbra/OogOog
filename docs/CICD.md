@@ -34,6 +34,14 @@ Two workflows, three triggers, four publish targets.
 | `workflow_dispatch` | everything | nothing |
 | `pull_request` closed | — | deletes that PR's preview directory |
 
+**`edited` is in the trigger list for one case: retargeting.** The trigger is
+scoped to PRs against `main`, so a PR opened against another branch gets no run
+— and, before this, got no run when it was retargeted either, because a base
+change arrives as `edited` rather than `synchronize`. That left PR #11 with no
+validation, no APK and no web preview: unreviewable, in a project where the only
+real review is installing the thing. The `build` job filters `edited` down to
+events that actually changed the base, so editing a description costs nothing.
+
 **Feature branches deliberately have no `push` trigger.** With `pull_request`
 active, a branch with an open PR would build twice for the same commit. That is
 not just waste — it is how run #10 raced run #8 over a shared publish target and
