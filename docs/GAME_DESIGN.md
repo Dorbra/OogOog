@@ -180,8 +180,22 @@ always end up with one code path that forgets to clear them.
 | **Bush** `b` | no | no | yes |
 
 Bushes are the single best mechanic Brawl Stars has, and they create ambush play
-out of almost no code. `Arena.conceals()` already ships; the bot AI is its first
-real consumer.
+out of almost no code.
+
+**Concealment is a simulation rule, not a fade**
+([ADR-0015](decisions/0015-concealment-is-a-sim-rule.md)). Until M3.1d
+`Arena.conceals()` had one caller — a 55% alpha on the player — so bushes hid
+nothing from anyone. Now:
+
+- **An enemy standing in a bush is not drawn at all**, and neither is its health
+  bar. Bots cannot target it either; both read the same `SimWorld.can_see()`.
+- **Shooting gives you away** for `reveal_time`. An ambusher who fires is
+  visible whether or not it is still in cover — otherwise cover is not cover,
+  it is invulnerability.
+- **Standing within `reveal_radius`** reveals what is in there. You can walk a
+  bush to check it, at the obvious risk.
+- **Teammates in cover stay visible**, faded. Losing your own side is not a
+  mechanic; for a 5-year-old it is just confusing.
 
 An open field makes top-down shooting into pure aim practice. Cover is what turns
 it into positioning.
@@ -258,25 +272,27 @@ is no image editor in this workflow.
 | M1.2 cats and garden | done |
 | M1.3 juice | done |
 | M2 arena cover | done |
-| **M3 bots + match loop** | **next** |
+| M3.1 fighters, teams, **bots** | done |
+| **M3.2 match loop — timer, score, results** | **next** |
 | M4 content — 3 archers, abilities, pickups, sound | planned |
 | M5 polish — profiling, thermals, release build | planned |
 
-**The honest summary: nothing fights back yet.** Everything above is a
-well-built shooting gallery. `feat/bots` is the milestone that makes it a game.
+**Something fights back now.** Thirty seconds of a headless 3v3 produces 76
+shots, 31 hits and 2 kills with the player standing still, and that is asserted
+in CI rather than remembered.
+
+**The honest summary is now different: a fight has no end.** Nobody wins, the
+score is not kept, and the match never stops. `feat/match-loop` is the milestone
+that makes it a game you can finish.
 
 ---
 
 ## 8. Planned, in order
 
-1. **`feat/bots`** — finish the `Actor`/`Dummy` unification `Health` started.
-   FSM: seek → strafe at preferred range → retreat. Aim by leading the target
-   **plus a deliberate error term**, and that error term is the difficulty knob.
-   Bots use the same draw mechanic as the player, or they feel like they cheat.
-2. **`feat/match-loop`** — player health, death, respawn, deathmatch to N kills,
+1. **`feat/match-loop`** — player health, death, respawn, deathmatch to N kills,
    countdown, results screen.
-3. **`chore/tech-debt`** — see [ARCHITECTURE.md §9](ARCHITECTURE.md#9-known-debt-stated-honestly).
-4. **`feat/super`** — an ability charged by **damage dealt, not a cooldown**.
+2. **`chore/tech-debt`** — see [ARCHITECTURE.md §9](ARCHITECTURE.md#9-known-debt-stated-honestly).
+3. **`feat/super`** — an ability charged by **damage dealt, not a cooldown**.
    With regen covering survival, this is what pulls players toward fights instead
    of away from them.
 
@@ -305,7 +321,7 @@ Recorded so they can be declined again with a reason.
 | **A physics engine for collision** | [ADR-0008](decisions/0008-no-physics-engine.md) — headless testability is worth more than engine features here. |
 | **Making the pond gameplay-relevant** | It is decorative. Water that slows or damages is a real design decision deserving its own change, not something smuggled into a cover PR. |
 | **2D lights** | Expensive on mobile for a flat-shaded game that gains nothing from them. |
-| **Aim assist on drawn shots by default** | `aim_assist_deg` exists and defaults to **0**. Bending a shot the player aimed themselves erodes the entire commitment trade. It is a slider so difficulty can be dialled in on the device rather than argued about here. |
+| **Aim assist strong enough to aim for you** | `aim_assist_deg` is **8°** since M3.1c — enough to forgive a thumb, not enough to find a target you were not already pointing at. It defaulted to 0 while the audience was one adult who wanted to commit to a draw; [ADR-0013](decisions/0013-audience-is-a-family.md) changed that premise. It stays a slider. |
 
 ---
 
@@ -322,5 +338,14 @@ Things that are genuinely undecided, and what would settle them.
 - **Does the arena read well?** Cover density, corridor widths, spawn placement
   are one text-file edit away. **Settled by:** playing it and saying what is
   wrong, rather than guessing at numbers.
-- **How hard should bots be?** The aim error term is the knob. **Settled by:**
-  tuning it on the device — which is exactly what the tuning panel exists for.
+- **How hard should bots be?** ~~The aim error term is the knob.~~ **Answered
+  in M3.1d:** one master slider, `bot_skill`, from which aim error, reaction
+  delay, target leading and whether a bot ambushes at all are derived
+  ([ADR-0014](decisions/0014-a-star-not-navigation-agent.md)). At full skill a
+  bot keeps 15% of its error and 20% of its delay rather than becoming perfect.
+  What is still open is **where to leave the slider for two kids five years
+  apart**, and that is settled by playing, not by argument.
+- **Do vanishing enemies read as fair, or as cheap?** Concealment became real in
+  M3.1d and it is the biggest change to how a match feels. **Settled by:** the
+  phone — `reveal_time` and `reveal_radius` are the first dials to turn, and
+  `bot_cover_skill_gate` turns ambushes off entirely.

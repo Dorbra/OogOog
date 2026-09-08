@@ -144,7 +144,18 @@ func test_death_then_respawn_restores_full_health_at_the_spawn_point() -> void:
 func test_a_fighter_with_no_controller_stands_still() -> void:
 	# This is what makes the old practice dummy a Fighter with nobody driving,
 	# and it is what keeps the combat screenshot deterministic.
+	#
+	# The controller has to be cleared explicitly now that every empty slot is
+	# filled with a bot. That is the point rather than an inconvenience: the
+	# null path is exactly what tools/screenshot.gd switches to before a
+	# capture, so this asserts the mechanism that gate depends on.
 	var w := _world()
+	# Every controller, not just this one: a live teammate bot shooting across
+	# the map could knock the subject about and turn a real assertion into a
+	# coin toss. A world with nobody driving is the thing being described.
+	for f in w.fighters:
+		f.controller = null
+
 	var idle: Fighter = w.enemies_of(w.player.team)[0]
 	var start := idle.position
 

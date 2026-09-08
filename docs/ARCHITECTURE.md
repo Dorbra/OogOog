@@ -21,19 +21,21 @@ load-bearing for a project where nobody can run the game locally
 │  PRODUCERS  │ ───────────────▶ │     SIM     │ ───────────────▶ │    VIEW     │
 │             │                  │             │                  │             │
 │ thumbs      │                  │ pure logic  │   read-only      │ nodes       │
-│ bot AI (M3) │                  │ fixed 60 Hz │ ◀ ─ ─ ─ ─ ─ ─ ─  │ sprites     │
+│ bot AI      │                  │ fixed 60 Hz │ ◀ ─ ─ ─ ─ ─ ─ ─  │ sprites     │
 │ network (?) │                  │ no nodes    │   state for      │ camera, FX  │
 └─────────────┘                  └─────────────┘   interpolation  └─────────────┘
 ```
 
 Three consequences worth stating plainly:
 
-- **The sim is unit-testable headless.** 185 assertions run in well under a
-  second with no display. That is the only correctness signal available to a
-  project with no local machine.
+- **The sim is unit-testable headless.** 297 assertions run in a few seconds
+  with no display. That is the only correctness signal available to a project
+  with no local machine.
 - **Bots are not a special case.** A bot is a third thing that produces an
   `InputCommand`. It gets no privileged access to state and cannot cheat by
-  construction.
+  construction. This stopped being an aspiration in M3.1d: `BotController`
+  landed without a single change to `Fighter`, `SimWorld.tick()` or the view
+  ([ADR-0014](decisions/0014-a-star-not-navigation-agent.md)).
 - **LAN multiplayer stays possible without a rewrite.** The network would become
   another `InputCommand` producer. This is *not* a promise that it will be built.
 
@@ -46,6 +48,7 @@ Three consequences worth stating plainly:
 | `src/sim/` | Simulation | `Tuning`, `Arena` | `input_command`, `sim_world`, `fighter`, `bow`, `arrow`, `health` |
 | `src/arena/` | World data | `Tuning` | `arena.gd` — ASCII grid, collision, spawns |
 | `src/input/` | Producer | `Tuning`, Godot `Input` | `touch_controls.gd` |
+| `src/ai/` | Producer | `src/sim/`, `src/arena/`, `Tuning` | `bot_controller.gd` — FSM and difficulty; `grid_path.gd` — A* over the arena grid |
 | `src/view/` | Presentation | everything | `game_view`, `camera_rig`, `fx`, `hud`, `cat_view`, `terrain`, `palette`, `safe_area` |
 | `src/debug/` | Tooling | everything | `tuning`, `debug_overlay`, `build_info` |
 | `src/main.gd` | Composition root | everything | wires the graph, pumps the tick |
@@ -294,9 +297,10 @@ Two non-obvious details:
 
 | Debt | Cost today | Where it gets paid |
 |---|---|---|
-| Nobody drives the enemy fighters | They stand still; there is no opponent yet | `feat/bots` |
-| No score, timer or win condition | A fight has no end | `feat/match-loop` |
-| `Tuning.get_value()` called per-tick at ~40 sites | Dictionary lookup in hot paths | `chore/tech-debt` — cache on the `changed` signal |
+| No score, timer or win condition | A fight has no end — bots fight forever and nobody wins | `feat/match-loop` |
+| Team size is a `bot_team_size` slider, not a pre-match screen | 1v1/2v2/3v3 is reachable only from DBG, which a 5-year-old cannot use | `feat/match-loop`, alongside the countdown and results UI |
+| `BotController._nearest_cover()` scans every open cell, casting a ray each | Negligible on 24×14; linear in arena area | Unclaimed — revisit if arenas grow |
+| `Tuning.get_value()` called per-tick at ~50 sites | Dictionary lookup in hot paths | `chore/tech-debt` — cache on the `changed` signal |
 | `SimWorld._free_arrow()` is a linear scan of 150 | O(n) per shot | `chore/tech-debt` — free list |
 | Web export is a debug build (36 MB wasm) | Slow first load on mobile data | `chore/tech-debt` — release-mode export |
 | A missing data file degrades silently at runtime | `push_error` to a log nobody reads on a phone | Unclaimed; the CI gate makes it unreachable, which is not the same as impossible |

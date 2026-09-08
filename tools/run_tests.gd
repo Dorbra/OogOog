@@ -54,9 +54,19 @@ func _run_file(path: String) -> void:
 		_failures.append("%s: failed to load" % path)
 		return
 
+	# load() hands back a GDScript even when the file FAILED TO COMPILE, so the
+	# null check above is not enough: new() then returns null, no test in the
+	# file ever runs, and the suite reports PASS having quietly dropped an
+	# entire file. That is how test_bots.gd first went missing — a method name
+	# that clashed with Object._set() took the whole file out.
 	var instance: Object = script.new()
+	if instance == null:
+		_failures.append("%s: failed to compile — the whole file was skipped" % path.get_file())
+		return
+
 	print("== %s" % path.get_file())
 
+	var cases := 0
 	for method in instance.get_method_list():
 		var name: String = method["name"]
 		if not name.begins_with("test_"):
@@ -65,10 +75,24 @@ func _run_file(path: String) -> void:
 		# Each test gets a fresh assertion sink so failures name their test.
 		instance.set("_case", name)
 		instance.set("_runner", self)
-		instance.call(name)
 
-	if instance.has_method("free"):
-		pass
+		# A GDScript runtime error inside a test does NOT propagate: the engine
+		# prints a SCRIPT ERROR, abandons the call, and returns here as if the
+		# test had finished. Before this check, a file whose helper crashed on
+		# every single test still reported PASS with a smaller total nobody was
+		# watching — which is precisely the "green while broken" failure this
+		# project keeps finding (ADR-0012). A test that asserts nothing has not
+		# run, whatever the exit code says.
+		cases += 1
+		var before := _assertions
+		instance.call(name)
+		if _assertions == before:
+			_failures.append(
+				"%s: %s asserted nothing — it crashed or is empty" % [path.get_file(), name]
+			)
+
+	if cases == 0:
+		_failures.append("%s: contains no test_ methods" % path.get_file())
 
 
 ## Called by test files.

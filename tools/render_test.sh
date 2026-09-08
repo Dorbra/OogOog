@@ -38,14 +38,21 @@ STATUS=$?
 
 # This container has no sound hardware. ALSA/PulseAudio failures are expected
 # and unrelated to rendering, so they must not be read as real errors.
-grep -viE "alsa|pulse|snd_|v-sync|audio driver|audio_server|audio_driver" "$LOG"
+#
+# "Failed to load cached shader, recompiling" is filtered for a subtler reason:
+# it is a WARNING about a cold shader cache, and the error check below looks for
+# "Failed to load" — so on any runner whose cache is empty this gate went red
+# with nothing wrong. Found by hitting it on a fresh container. Filtered by its
+# own exact wording rather than by loosening "Failed to load", which is what
+# catches a real script that will not load.
+grep -viE "alsa|pulse|snd_|v-sync|audio driver|audio_server|audio_driver|cached shader" "$LOG"
 
 if [ "$STATUS" -ne 0 ]; then
   echo "::error::Render test exited with status ${STATUS}"
   exit 1
 fi
 
-if grep -viE "alsa|pulse|snd_|v-sync|audio driver|audio_server|audio_driver" "$LOG" \
+if grep -viE "alsa|pulse|snd_|v-sync|audio driver|audio_server|audio_driver|cached shader" "$LOG" \
    | grep -qE "SCRIPT ERROR|USER ERROR|Parse Error|Failed to load"; then
   echo "::error::Script errors during rendering (see log above)"
   exit 1
