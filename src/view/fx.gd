@@ -52,7 +52,7 @@ func _on_hit(pos: Vector2, dir: Vector2, damage: float, full_draw: bool) -> void
 	hitstop(Tuning.get_value("hitstop_hit"))
 
 
-func _on_killed(pos: Vector2, dir: Vector2) -> void:
+func _on_killed(pos: Vector2, dir: Vector2, _scoring_team: int) -> void:
 	spawn_burst(pos, -dir, 22, Palette.CAT_ENEMY)
 	spawn_ring(pos, 20.0, 110.0)
 	hitstop(Tuning.get_value("hitstop_kill"))

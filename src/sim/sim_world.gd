@@ -13,7 +13,11 @@ extends RefCounted
 ## feedback needs the latter. All damage funnels through apply_damage() so no
 ## code path can bypass these.
 signal hit(position: Vector2, direction: Vector2, damage: float, full_draw: bool)
-signal killed(position: Vector2, direction: Vector2)
+## `scoring_team` is the team that gets the point, or -1 when nobody does.
+## Attribution has to travel with the event: the view can find the corpse from
+## `position`, but no amount of looking at the world afterwards recovers who
+## fired the arrow.
+signal killed(position: Vector2, direction: Vector2, scoring_team: int)
 signal fired(position: Vector2, direction: Vector2, draw_strength: float)
 signal arrow_expired(position: Vector2)
 
@@ -29,6 +33,11 @@ const MAX_TEAM_SIZE := 3
 ## on the device — the icon-based picker a five-year-old can use belongs with
 ## the countdown and results screens in feat/match-loop, not here.
 var team_size: int = MAX_TEAM_SIZE
+
+## Score, clock and phase. Owned by the simulation rather than the view,
+## because "has anyone won" is a fact about the world and not about the screen
+## ([ADR-0016](../../docs/decisions/0016-the-match-is-sim-state.md)).
+var match_state := MatchState.new()
 
 var player: Fighter
 var fighters: Array[Fighter] = []
@@ -53,6 +62,7 @@ func _init(from_arena: Arena = null) -> void:
 		arrows[i] = Arrow.new()
 
 	_build_teams()
+	match_state.reset()
 
 
 ## Two teams, drawn from the arena's `P` cells and CLUSTERED.
@@ -127,6 +137,16 @@ func enemies_of(team: int) -> Array[Fighter]:
 
 
 func tick(cmd: InputCommand, delta: float) -> void:
+	match_state.tick(delta)
+
+	# The countdown and the results screen freeze the world by simply not
+	# ticking it. Deliberately NOT get_tree().paused: pausing the scene tree
+	# would take the tuning panel with it, and adjusting sliders between rounds
+	# is the whole on-device workflow (ADR-0004). It also keeps the freeze
+	# inside the simulation, where it is testable without a display.
+	if not match_state.simulating():
+		return
+
 	for f in fighters:
 		# The player's command comes from thumbs; everyone else's from their
 		# controller, or an empty command when nobody is driving. That single
@@ -247,7 +267,9 @@ func _tick_arrows(delta: float) -> void:
 			if f.team == arrow.owner_team:
 				continue
 			if arrow.hits_circle(f.position, f.radius):
-				apply_damage(f, arrow.damage, arrow.velocity.normalized(), arrow.full_draw)
+				apply_damage(
+					f, arrow.damage, arrow.velocity.normalized(), arrow.full_draw, arrow.owner_team
+				)
 				arrow.deactivate()
 				break
 
@@ -260,7 +282,14 @@ func _tick_arrows(delta: float) -> void:
 ##
 ## Keeping this as the only entry point is what guarantees the view never misses
 ## a hit: there is no second path that damages something quietly.
-func apply_damage(target: Fighter, amount: float, direction: Vector2, full_draw: bool) -> void:
+## `attacker_team` defaults to -1, meaning nobody gets the credit. That default
+## is doing real work rather than being a convenience: it keeps every existing
+## caller compiling, and it is the honest answer for damage with no author —
+## which is what any future hazard or fall damage would be. A kill only ever
+## scores for a team that actually earned it.
+func apply_damage(
+	target: Fighter, amount: float, direction: Vector2, full_draw: bool, attacker_team: int = -1
+) -> void:
 	var applied := target.take_damage(amount)
 	if applied <= 0.0:
 		return
@@ -270,7 +299,10 @@ func apply_damage(target: Fighter, amount: float, direction: Vector2, full_draw:
 
 	if target.health.died_this_tick:
 		target.health.died_this_tick = false
-		killed.emit(target.position, direction)
+		# A team never scores for killing itself, however the damage was routed.
+		var scoring := attacker_team if attacker_team != target.team else -1
+		match_state.record_kill(scoring)
+		killed.emit(target.position, direction, scoring)
 
 
 ## Can a fighter standing at `from` see `target`?

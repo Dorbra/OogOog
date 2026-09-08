@@ -156,6 +156,11 @@ func test_a_fighter_with_no_controller_stands_still() -> void:
 	for f in w.fighters:
 		f.controller = null
 
+	# The match must be LIVE, or this passes for entirely the wrong reason:
+	# SimWorld does not tick anyone outside that phase, so a frozen world would
+	# satisfy "nothing moved" while proving nothing about controllers at all.
+	w.match_state.phase = MatchState.Phase.LIVE
+
 	var idle: Fighter = w.enemies_of(w.player.team)[0]
 	var start := idle.position
 

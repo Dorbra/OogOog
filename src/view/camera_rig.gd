@@ -32,7 +32,8 @@ func listen_to(world: SimWorld) -> void:
 			add_trauma(Tuning.get_value("shake_hit") * (1.5 if full else 1.0))
 	)
 	world.killed.connect(
-		func(_p: Vector2, _d: Vector2) -> void: add_trauma(Tuning.get_value("shake_kill"))
+		func(_p: Vector2, _d: Vector2, _team: int) -> void:
+			add_trauma(Tuning.get_value("shake_kill"))
 	)
 	world.fired.connect(
 		func(_p: Vector2, _d: Vector2, draw: float) -> void:
