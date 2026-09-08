@@ -144,15 +144,26 @@ so the other model stays available.
 
 | | Min draw | Full draw |
 |---|---|---|
-| Arrow speed | 700 px/s | 1450 px/s |
-| Reach (speed × lifetime) | 315 px | 652 px |
-| Damage | 14 | 42 |
+| Arrow speed | 480 px/s | 780 px/s |
+| Reach (speed × lifetime) | 120 px | 195 px |
+| Damage | 10 | 28 |
 | Max deviation | 8° | 0° |
 
-Full draw takes `draw_time_full` = 0.28 s. A full-draw hit is 3× a rushed one and
-flies dead straight, which is the entire argument for committing.
+Full draw takes `draw_time_full` = 0.45 s. A full-draw hit is nearly 3× a rushed
+one and flies dead straight, which is the entire argument for committing.
 
-### Quiver: 5 arrows, one back every 0.85 s
+**Reach is not a free parameter.** 195 px is the shortest half-axis of what the
+camera shows, and [ADR-0016](decisions/0016-range-is-bounded-by-the-camera.md)
+holds it there: if something can hit you, you can see it. The first 3v3 playtest
+was *"the bots just shot at me from out-of-screen"*, and measurement agreed —
+79% of the enemies in range to hit the player were off screen. It is now 0%, and
+a test fails if that changes.
+
+**Time to kill: 200 hp ÷ 28 = about 7 full-draw hits**, up from 3.3. With three
+enemies able to focus one player, 3.3 hits was the "dead in a second" the same
+playtest reported.
+
+### Quiver: 5 arrows, one back every 1.1 s
 
 Lifted from Brawl Stars' ammo rhythm. It is not a resource to manage across a
 match — it is a **pacing device**. It gates spam and forces the "am I committed
