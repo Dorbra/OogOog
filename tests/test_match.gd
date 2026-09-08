@@ -276,3 +276,39 @@ func test_every_fighter_still_spawns_on_open_ground_at_any_team_size() -> void:
 			seen[f.position] = true
 		_runner.check(seen.size() == w.fighters.size(), _fail("no two share a spawn"))
 	_restore()
+
+
+func test_matches_actually_resolve() -> void:
+	# The "nothing happens" gate, and it had no test at all — which is why a
+	# build shipped where the modal two-minute result was 1-0 and seven matches
+	# in twenty-four ended goalless.
+	#
+	# The cause was not what it looked like. Healing restored 121% of all damage
+	# dealt: damage worth 13.7 kills produced 1. Halving the heal RATE changed
+	# nothing, because you cannot heal above maximum — total healing is capped by
+	# damage taken, so a lower rate only makes topping up slower, and a two-minute
+	# match has plenty of slow. The levers are how often anyone gets an
+	# uninterrupted window to start healing (regen_delay) and how readily bots
+	# break off to take one (bot_retreat_health).
+	#
+	# Deliberately loose. This pins the disaster, not the balance: the floor is
+	# well under the 3.4 mean the chosen values measure, so ordinary tuning does
+	# not trip it and "matches stopped resolving" does.
+	var kills := 0
+	var runs := 6
+	for run in runs:
+		var w := SimWorld.new()
+		for i in range(1, w.fighters.size()):
+			w.fighters[i].controller = BotController.new(1000 + run * 131 + i * 7919)
+		w.match_state.phase = MatchState.Phase.LIVE
+
+		var idle := InputCommand.new()
+		var ticks := 0
+		var cap := int((Tuning.get_value("match_time_limit") + 120.0) * 60.0)
+		while w.match_state.phase == MatchState.Phase.LIVE and ticks < cap:
+			w.tick(idle, DT)
+			ticks += 1
+		kills += w.match_state.scores[0] + w.match_state.scores[1]
+
+	var mean := float(kills) / float(runs)
+	_runner.check(mean >= 2.0, _fail("a match produces more than a token kill, got %.2f" % mean))
