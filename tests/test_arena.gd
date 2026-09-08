@@ -206,3 +206,33 @@ func test_actor_cannot_walk_through_a_wall() -> void:
 	var c := w.arena.cell_at(w.player.position)
 	_runner.check(not w.arena.is_solid(c.x, c.y), _fail("player never ends up inside a wall"))
 	_runner.check(w.player.position.x > 0.0, _fail("player stays inside the arena"))
+
+
+func test_every_spawn_is_reachable_from_every_other() -> void:
+	# A hand-edited map can seal a team behind stone with one stray '#', and
+	# nothing else notices: the spawn-on-open-ground check is satisfied by a
+	# walled-in pocket. A flood fill is the cheap way to rule it out, and the
+	# arena format exists precisely so layouts get edited casually.
+	var a := Arena.new()
+	var spawns := a.spawn_points()
+	_runner.check(spawns.size() >= 2, _fail("the arena has spawns to connect"))
+	if spawns.size() < 2:
+		return
+
+	var start := a.cell_at(spawns[0])
+	var seen := {start: true}
+	var stack: Array[Vector2i] = [start]
+	while not stack.is_empty():
+		var c: Vector2i = stack.pop_back()
+		for step: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+			var n := c + step
+			if seen.has(n) or not a.in_grid(n.x, n.y) or a.is_solid(n.x, n.y):
+				continue
+			seen[n] = true
+			stack.append(n)
+
+	var unreachable := 0
+	for point: Vector2 in spawns:
+		if not seen.has(a.cell_at(point)):
+			unreachable += 1
+	_runner.check(unreachable == 0, _fail("every spawn is reachable from every other"))

@@ -193,7 +193,12 @@ fully enclosed.
 
 ## 6. The arena is a text file
 
-`data/arenas/arena_01.txt` — 40 × 22 cells at 60 px = a **2400 × 1320** world.
+`data/arenas/arena_01.txt` — 24 × 14 cells at 60 px = a **1440 × 840** world.
+
+Sized for 3v3 and **mirrored left/right**, so neither team gets better cover —
+symmetry here is a fairness property, not a style choice. At the current zoom
+roughly half the map is on screen at once, which is what keeps a three-minute
+match about fighting rather than walking.
 
 ```
 #  wall    blocks movement AND arrows

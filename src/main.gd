@@ -101,10 +101,6 @@ func _process(delta: float) -> void:
 	# The transport decides how often it actually transmits.
 	Net.set_local_position(world.player.position)
 
-	_hud.quiver = world.player.bow.quiver
-	_hud.capacity = world.player.bow.capacity()
-	_hud.draw_strength = controls.draw_strength
-
 	_overlay.queue_redraw()
 
 
