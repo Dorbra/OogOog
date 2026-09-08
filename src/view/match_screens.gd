@@ -33,9 +33,29 @@ func setup(state: MatchState) -> void:
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
 	_body = load(BODY_PATH)
 	_face = load(FACE_PATH)
+	_fit_to_viewport()
+	get_viewport().size_changed.connect(_fit_to_viewport)
+
+
+## Give this Control a real rect.
+##
+## THIS IS LOAD-BEARING AND WAS MISSING. A Control parented to a CanvasLayer has
+## no Control parent for anchors to resolve against, so
+## `set_anchors_preset(PRESET_FULL_RECT)` left it at size (0, 0) — and a
+## zero-size Control can never be hit, so `_gui_input()` never fired and the
+## setup screen could not be dismissed at all. The game was stuck on its first
+## screen and tapping did nothing.
+##
+## It drew perfectly the whole time, because `_draw()` is not clipped by the
+## Control's rect and every layout here is computed from `get_viewport_rect()`.
+## So every render capture looked right while the screen was completely dead,
+## which is the whole lesson of ADR-0019: appearance is not behaviour.
+func _fit_to_viewport() -> void:
+	set_anchors_preset(Control.PRESET_FULL_RECT)
+	position = Vector2.ZERO
+	size = get_viewport_rect().size
 
 
 func _process(_delta: float) -> void:
