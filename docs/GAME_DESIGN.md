@@ -145,13 +145,14 @@ so the other model stays available.
 | | Min draw | Full draw |
 |---|---|---|
 | Arrow speed | 700 px/s | 1450 px/s |
+| Reach (speed × lifetime) | 315 px | 652 px |
 | Damage | 14 | 42 |
 | Max deviation | 8° | 0° |
 
 Full draw takes `draw_time_full` = 0.28 s. A full-draw hit is 3× a rushed one and
 flies dead straight, which is the entire argument for committing.
 
-### Quiver: 3 arrows, one back every 0.85 s
+### Quiver: 5 arrows, one back every 0.85 s
 
 Lifted from Brawl Stars' ammo rhythm. It is not a resource to manage across a
 match — it is a **pacing device**. It gates spam and forces the "am I committed

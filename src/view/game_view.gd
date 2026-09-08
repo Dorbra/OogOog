@@ -160,6 +160,7 @@ func _draw() -> void:
 			_draw_health_bar(f, _chip[i])
 
 	_draw_arrows(alpha)
+	_draw_quiver_pips()
 
 
 func _draw_arrows(alpha: float) -> void:
@@ -207,21 +208,36 @@ func _draw_aim_preview(alpha: float) -> void:
 		return
 
 	var strength := _controls.draw_strength
-	# Range shown is the real thing: speed x lifetime, so the preview cannot
-	# lie about where the arrow actually dies.
+	# The real thing: speed x lifetime, uncapped. This used to be clamped to
+	# 620px directly under a comment claiming the preview could not lie, while
+	# an arrow actually flew 2320 — so the landing ring marked a spot the shot
+	# blew straight past. arrow_lifetime is now tuned so the honest number fits
+	# on screen, which is what made the clamp unnecessary rather than merely
+	# dishonest.
 	var reach := _world.player.bow.speed_for(strength) * Tuning.get_value("arrow_lifetime")
-	reach = minf(reach, 620.0)
-
 	var start := pos + dir * _world.player.radius
-	var col := Palette.AIM.lerp(Color.WHITE, strength)
-	var dots := 14
-	for i in dots:
-		var t := float(i) / float(dots - 1)
-		var p := start + dir * reach * t
-		var fade := (1.0 - t) * (0.25 + 0.55 * strength)
-		draw_circle(p, lerpf(4.0, 2.0, t), Color(col.r, col.g, col.b, fade))
-
 	var end := start + dir * reach
+
+	# Stop at the first wall, using the same cast the arrows themselves use.
+	# Without this the line crosses stone and promises a shot the arena refuses.
+	var wall: Dictionary = _world.arena.cast_segment(start, end)
+	var blocked: bool = wall["hit"]
+	if blocked:
+		end = wall["point"]
+
+	var col := Palette.AIM.lerp(Color.WHITE, strength)
+	if blocked:
+		# A blocked line reads as blocked, rather than as a shorter good one.
+		col = col.lerp(Palette.WALL_TOP, 0.55)
+
+	var span := start.distance_to(end)
+	var dots := maxi(3, int(span / 34.0))
+	for i in dots:
+		var t := float(i) / float(maxi(dots - 1, 1))
+		var p := start.lerp(end, t)
+		var fade := (1.0 - t) * (0.25 + 0.55 * strength)
+		draw_circle(p, lerpf(4.5, 2.0, t), Color(col.r, col.g, col.b, fade))
+
 	draw_arc(
 		end,
 		lerpf(10.0, 22.0, strength),
@@ -231,6 +247,34 @@ func _draw_aim_preview(alpha: float) -> void:
 		Color(col.r, col.g, col.b, 0.5 + 0.4 * strength),
 		2.5
 	)
+
+
+## Ammo under the hero, in WORLD space, where Brawl Stars puts it and where the
+## eye already is mid-fight. It used to sit at the bottom of the screen, which
+## meant looking away from the fight to count arrows.
+func _draw_quiver_pips() -> void:
+	var f := _world.player
+	if not f.alive():
+		return
+
+	var capacity := f.bow.capacity()
+	if capacity <= 0:
+		return
+
+	var pip_w := 9.0
+	var pip_h := 5.0
+	var gap := 3.0
+	var total := capacity * pip_w + (capacity - 1) * gap
+	var origin := f.position + Vector2(-total * 0.5, f.radius * 1.15)
+
+	for i in capacity:
+		var r := Rect2(origin + Vector2(i * (pip_w + gap), 0.0), Vector2(pip_w, pip_h))
+		# Dark backing plus a light edge, so a pip reads against grass, dirt or
+		# a cat standing behind it.
+		draw_rect(r.grow(1.5), Color(0.05, 0.06, 0.08, 0.6))
+		draw_rect(r, Color(1, 1, 1, 0.18))
+		if i < f.bow.quiver:
+			draw_rect(r, Palette.ARROW)
 
 
 func _draw_health_bar(f: Fighter, chip: float) -> void:
