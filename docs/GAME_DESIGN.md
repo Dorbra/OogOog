@@ -181,6 +181,39 @@ your own bow shakes nothing at all. This was a real defect, not a taste
 preference: the screen previously never stopped jittering and the whole game
 micro-froze about once a second for events happening off screen.
 
+### Healing: why a fight resolves at all
+
+Out-of-combat regen is the reason this game is not punishing, and it was also the
+reason nothing ever died. Measured over two minutes of a real 3v3:
+
+| | |
+|---|---|
+| Damage dealt | 2738 — enough to fund **13.7 kills** |
+| Kills | **1** |
+| Healing restored | **3301 hp — 121% of all damage dealt** |
+
+**Lowering the heal RATE does nothing**, and that is worth writing down because it
+is the obvious move. You cannot heal above maximum, so total healing is capped by
+damage taken; a slower rate only delays topping up, and a two-minute match has
+plenty of slow. Halving it moved the mean from 1.3 kills to 1.5.
+
+The levers are **how often anyone gets an uninterrupted window to start healing**
+(`regen_delay` 3 → **4.5 s**) and **how readily bots break off to take one**
+(`bot_retreat_health` 0.30 → **0.12**). Chosen by sweeping both:
+
+| delay | retreat | mean kills | player deaths standing still |
+|---|---|---|---|
+| 3.0 | 0.30 | 1.12 | 0 |
+| 3.0 | 0.12 | 2.62 | 0 |
+| **4.5** | **0.12** | **3.38** | **0** |
+| 6.0 | 0.12 | 2.12 | 0 |
+
+**More delay is not better** — 6.0 measures worse than 4.5. And retreat is the
+bigger lever: at the original delay, changing it alone more than doubles kills.
+
+Pinned by `test_matches_actually_resolve`, with a floor well under the measured
+mean so ordinary tuning does not trip it and "matches stopped resolving" does.
+
 ### The match: two minutes, first to six
 
 | | |

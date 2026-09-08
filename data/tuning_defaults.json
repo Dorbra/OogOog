@@ -93,7 +93,7 @@
     "group": "Bots",
     "max": 1.0,
     "min": 0.0,
-    "value": 0.3
+    "value": 0.12
   },
   "bot_sight_range": {
     "group": "Bots",
@@ -285,7 +285,7 @@
     "group": "Regen",
     "max": 10.0,
     "min": 0.0,
-    "value": 3.0
+    "value": 4.5
   },
   "regen_rate_pct": {
     "group": "Regen",

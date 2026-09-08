@@ -28,7 +28,7 @@ load-bearing for a project where nobody can run the game locally
 
 Three consequences worth stating plainly:
 
-- **The sim is unit-testable headless.** 369 assertions run in a few seconds
+- **The sim is unit-testable headless.** 370 assertions run in a few seconds
   with no display. That is the only correctness signal available to a project
   with no local machine.
 - **Bots are not a special case.** A bot is a third thing that produces an
