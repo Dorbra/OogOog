@@ -231,13 +231,13 @@
     "group": "Match",
     "max": 50.0,
     "min": 1.0,
-    "value": 15.0
+    "value": 6.0
   },
   "match_time_limit": {
     "group": "Match",
     "max": 600.0,
     "min": 30.0,
-    "value": 180.0
+    "value": 120.0
   },
   "move_accel": {
     "group": "Movement",

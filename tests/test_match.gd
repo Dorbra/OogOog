@@ -213,3 +213,29 @@ func test_a_new_match_starts_from_zero() -> void:
 	_runner.check(m.scores[0] == 0 and m.scores[1] == 0, _fail("last round's score is cleared"))
 	_runner.check(m.elapsed == 0.0, _fail("and so is the clock"))
 	_runner.check(m.phase == MatchState.Phase.COUNTDOWN, _fail("a countdown begins"))
+
+
+func test_a_match_always_ends() -> void:
+	# Sudden death has no clock of its own: a level score keeps the match open
+	# until somebody scores. Measured over 24 simulated matches, 6 reached it
+	# and 2 of those were 0-0 — so "the tiebreak resolves quickly" is an
+	# assumption about kill rate, and kill rate is a slider. If it ever stops
+	# being true the match never ends and the results screen never appears,
+	# which on a phone is indistinguishable from the game hanging.
+	var w := SimWorld.new()
+	w.match_state.phase = MatchState.Phase.LIVE
+
+	var idle := InputCommand.new()
+	var limit := Tuning.get_value("match_time_limit")
+	# The cap plus a generous overtime. Deliberately loose: this is a liveness
+	# check, not a balance assertion.
+	var ticks := int((limit + 180.0) * 60.0)
+	var ended := false
+	for _i in ticks:
+		w.tick(idle, DT)
+		if w.match_state.phase == MatchState.Phase.OVER:
+			ended = true
+			break
+
+	_runner.check(ended, _fail("the match resolves rather than running forever"))
+	_runner.check(w.match_state.winner >= 0, _fail("and it names a winner"))
