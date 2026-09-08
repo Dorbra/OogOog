@@ -35,3 +35,4 @@ adapted: **Context → Decision → Consequences → Alternatives**.
 | [0013](0013-audience-is-a-family.md) | The audience is a family, not one adult | Accepted, supersedes the audience premise in 0006 |
 | [0014](0014-a-star-not-navigation-agent.md) | Bots produce InputCommands; A* over the grid | Accepted |
 | [0015](0015-concealment-is-a-sim-rule.md) | Concealment is a simulation rule, not a fade | Accepted |
+| [0016](0016-range-is-bounded-by-the-camera.md) | Nothing may reach further than the camera shows | Accepted |

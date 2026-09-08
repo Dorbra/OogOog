@@ -115,6 +115,18 @@ func _cone_is_clear(arena: Arena, p: Vector2, q: Vector2, cone_deg: float) -> bo
 	return true
 
 
+## A staging distance that is always inside what a bot can see and shoot.
+##
+## Derived rather than written down. Hard-coded fixture distances have now
+## broken twice: 400 px went out of sight range in the pacing pass, and 300 px
+## did too — and one of those failures would have been SILENT, asserting "the
+## bot held fire" against a bot that simply had no target.
+func _engage_distance() -> float:
+	return minf(
+		Tuning.get_value("bot_sight_range") * 0.8, Tuning.get_value("bot_preferred_range") + 60.0
+	)
+
+
 func _bush_centre(arena: Arena) -> Vector2:
 	for cell in arena.cells_in_rect(arena.bounds()):
 		if cell.z == Arena.Cell.BUSH:
@@ -163,6 +175,10 @@ func test_a_concealed_enemy_is_invisible_until_it_shoots() -> void:
 
 
 func test_line_of_sight_is_blocked_by_stone() -> void:
+	# The one fixture that deliberately keeps a fixed distance. Every assertion
+	# below passes an explicit range (or asks can_see(), which has none), so
+	# sight range cannot be what makes them true — and a wider separation gives
+	# the arena more wall-separated pairs to offer.
 	var w := _world()
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
@@ -191,7 +207,9 @@ func test_the_reaction_delay_holds_the_first_shot_and_then_releases_it() -> void
 	var w := _world()
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
-	_runner.check(_place(w, bot, foe, 300.0, false), _fail("the arena offers a clear pair"))
+	_runner.check(
+		_place(w, bot, foe, _engage_distance(), false), _fail("the arena offers a clear pair")
+	)
 
 	_tune("bot_skill", 0.0)
 	_tune("bot_aim_error_deg", 0.0)
@@ -221,7 +239,9 @@ func test_a_bot_draws_at_a_human_rate_rather_than_emptying_its_quiver() -> void:
 	var w := _world()
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
-	_runner.check(_place(w, bot, foe, 300.0, false), _fail("the arena offers a clear pair"))
+	_runner.check(
+		_place(w, bot, foe, _engage_distance(), false), _fail("the arena offers a clear pair")
+	)
 
 	_tune("bot_skill", 1.0)
 	_tune("bot_aim_error_deg", 0.0)
@@ -249,10 +269,20 @@ func test_a_bot_will_not_fire_into_stone() -> void:
 	var w := _world()
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
-	_runner.check(_place(w, bot, foe, 400.0, true), _fail("the arena offers a blocked pair"))
+	_runner.check(
+		_place(w, bot, foe, _engage_distance(), true), _fail("the arena offers a blocked pair")
+	)
 
 	foe.reveal_timer = 999.0
 	_runner.check(w.can_see(bot.position, foe), _fail("the target IS acquired through the wall"))
+	# Belt and braces: can_see() ignores range, but the bot acquires through
+	# nearest_visible_enemy(), which does not. Out past bot_sight_range this
+	# test would assert "no shots" against a bot that had no target at all —
+	# green, and testing nothing.
+	_runner.check(
+		w.nearest_visible_enemy(bot.position, Tuning.get_value("bot_sight_range"), bot) == foe,
+		_fail("and it is within sight range, so holding fire is a real decision")
+	)
 
 	_tune("bot_skill", 1.0)
 	_tune("bot_aim_error_deg", 0.0)
@@ -281,7 +311,8 @@ func test_the_skill_slider_measurably_narrows_the_spread() -> void:
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
 	_runner.check(
-		_place(w, bot, foe, 300.0, false, 35.0), _fail("the arena offers a wide-open pair")
+		_place(w, bot, foe, _engage_distance(), false, 35.0),
+		_fail("the arena offers a wide-open pair")
 	)
 
 	_tune("bot_aim_error_deg", 30.0)
@@ -319,7 +350,13 @@ func test_leading_puts_the_shot_ahead_of_a_moving_target() -> void:
 	var w := _world()
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
-	_runner.check(_place(w, bot, foe, 400.0, false), _fail("the arena offers a clear pair"))
+	# Inside bot_sight_range. The old 400 px fixture silently stopped acquiring a
+	# target when the pacing pass pulled sight range inside the visible screen —
+	# the test failed loudly, which is the only reason it is not still passing
+	# with the bot aiming at nothing.
+	_runner.check(
+		_place(w, bot, foe, _engage_distance(), false), _fail("the arena offers a clear pair")
+	)
 
 	_tune("bot_skill", 1.0)
 	_tune("bot_aim_error_deg", 0.0)
@@ -405,7 +442,9 @@ func test_a_hurt_bot_retreats_and_breaks_the_line_of_sight() -> void:
 	var w := _world()
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
-	_runner.check(_place(w, bot, foe, 300.0, false), _fail("the arena offers a clear pair"))
+	_runner.check(
+		_place(w, bot, foe, _engage_distance(), false), _fail("the arena offers a clear pair")
+	)
 
 	_tune("bot_retreat_health", 0.35)
 	_tune("bot_skill", 1.0)
