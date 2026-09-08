@@ -173,6 +173,14 @@ jobs:
           ./tools/render_test.sh "$(command -v godot)" 90 build/shot.png idle
           ./tools/render_test.sh "$(command -v godot)" 240 build/combat.png combat
 
+      # A capture proves the screen DREW. It does not prove anyone can touch it.
+      # A build shipped where the setup screen could not be dismissed at all —
+      # a Control parented to a CanvasLayer had size (0, 0), so no tap could ever
+      # land on it, and the game was stuck on its first screen while every gate
+      # above stayed green and every screenshot looked perfect. See ADR-0019.
+      - name: UI interaction test
+        run: ./tools/verify_ui.sh "$(command -v godot)"
+
       # Everything above this line runs the project FROM SOURCE, where every data
       # file is sitting on disk. That is exactly how a missing arena_01.txt
       # reached a phone: .txt is not a "resource", so the export dropped it, and

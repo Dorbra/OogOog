@@ -79,6 +79,7 @@ cheapest and most likely to fail first.
 | 1 | **Version check** — `.godot-version` must equal the workflow's `GODOT_VERSION` | The repo and CI silently drifting to different engines |
 | 2 | **`gdformat --check` + `gdlint`** | Style drift; `gdlint` also catches real ordering bugs |
 | 3 | **`--import`** — build the `.godot/` cache | The classic green-build-broken-artifact. Skipping this is *the* canonical Godot CI mistake |
+| 4b | **UI interaction test** — `tools/verify_ui.sh` delivers real taps to the real scene | A control that draws but cannot be touched. A build shipped stuck on its first screen with every other gate green ([ADR-0019](decisions/0019-appearance-is-not-behaviour.md)) |
 | 4 | **Unit tests** — 369 assertions, `tools/run_tests.gd` | Sim logic regressions. A file that fails to compile, or a test that asserts nothing, is a failure — not a smaller total nobody notices |
 | 5 | **Boot smoke test** — 300 headless frames, fails on any engine or script error | Crash-on-launch, which otherwise costs a full install round trip to discover |
 | 6 | **Publish logic tests** — 18 assertions, `tests/test_publish_web.sh` | A root publish deleting open PRs' previews; `gh-pages` history growing unbounded |

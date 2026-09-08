@@ -38,3 +38,4 @@ adapted: **Context → Decision → Consequences → Alternatives**.
 | [0016](0016-range-is-bounded-by-the-camera.md) | Nothing may reach further than the camera shows | Accepted |
 | [0017](0017-the-match-is-sim-state.md) | The match is simulation state; the freeze is a phase | Accepted |
 | [0018](0018-feedback-is-about-you.md) | Feedback is for what happens to *you* | Accepted |
+| [0019](0019-appearance-is-not-behaviour.md) | A capture proves it drew; only an input proves it works | Accepted |
