@@ -90,6 +90,20 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 	_save(out)
 
 
+## Reads a tuning value by NODE LOOKUP rather than by the `Tuning` global.
+##
+## This file runs as `--script`, so it is compiled before the project's
+## autoloads are registered and a bare `Tuning.get_value(...)` is a compile
+## error — "Identifier not found: Tuning". Everything under `src/` is loaded
+## after they exist, which is why nothing else in the project needs this.
+func _tuned(key: String, fallback: float) -> float:
+	var node := root.get_node_or_null("/root/Tuning")
+	if node == null:
+		push_warning("screenshot: Tuning autoload missing, using fallback for '%s'" % key)
+		return fallback
+	return node.get_value(key)
+
+
 ## Takes every bot off the controls, so a render captures a staged scene rather
 ## than a race.
 ##
@@ -133,8 +147,16 @@ func _stage_target(world) -> void:
 	# and the capture silently stopped showing a hit at all. Ask the arena
 	# instead — an open cell with a clear line of fire, whatever the map looks
 	# like. This survives the arena being re-authored, which it just was.
+	# Distances are derived from how far an arrow ACTUALLY flies, not written
+	# down. The previous list started at 300 px; the pacing pass cut the bow's
+	# reach to 195 and every staged shot then died in mid-air. The capture said
+	# TIMED OUT WITHOUT A HIT rather than writing a plausible screenshot, which
+	# is the gate working (ADR-0012) — but a fixture that has to be re-tuned by
+	# hand every time a number moves is a fixture that will be wrong again.
 	var from: Vector2 = world.player.position
-	for distance in [300.0, 240.0, 380.0, 180.0]:
+	var reach: float = _tuned("draw_max_speed", 780.0) * _tuned("arrow_lifetime", 0.25)
+	for fraction in [0.65, 0.5, 0.8, 0.35]:
+		var distance: float = reach * fraction
 		for step in 16:
 			var angle := TAU * float(step) / 16.0
 			var spot: Vector2 = from + Vector2(cos(angle), sin(angle)) * distance
@@ -146,7 +168,12 @@ func _stage_target(world) -> void:
 			target.position = spot
 			target.prev_position = spot
 			target.spawn_point = spot
-			print("screenshot: staged target at %s (%.0fpx away)" % [str(spot), distance])
+			print(
+				(
+					"screenshot: staged target at %s (%.0fpx away, %.0f%% of the bow's %.0fpx reach)"
+					% [str(spot), distance, fraction * 100.0, reach]
+				)
+			)
 			return
 
 	push_warning("screenshot: found nowhere open to stage a target")

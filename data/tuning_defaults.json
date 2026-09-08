@@ -27,7 +27,7 @@
     "group": "Bow",
     "max": 5.0,
     "min": 0.2,
-    "value": 0.45
+    "value": 0.25
   },
   "arrow_width": {
     "group": "Bow",
@@ -45,19 +45,19 @@
     "group": "Aim assist",
     "max": 3000.0,
     "min": 100.0,
-    "value": 700.0
+    "value": 210.0
   },
   "bot_aim_error_deg": {
     "group": "Bots",
     "max": 45.0,
     "min": 0.0,
-    "value": 18.0
+    "value": 32.0
   },
   "bot_ambush_range": {
     "group": "Bots",
     "max": 900.0,
     "min": 60.0,
-    "value": 320.0
+    "value": 160.0
   },
   "bot_cover_skill_gate": {
     "group": "Bots",
@@ -75,13 +75,13 @@
     "group": "Bots",
     "max": 900.0,
     "min": 60.0,
-    "value": 380.0
+    "value": 150.0
   },
   "bot_reaction_time": {
     "group": "Bots",
     "max": 2.0,
     "min": 0.0,
-    "value": 0.6
+    "value": 0.9
   },
   "bot_repath_interval": {
     "group": "Bots",
@@ -99,13 +99,13 @@
     "group": "Bots",
     "max": 2000.0,
     "min": 100.0,
-    "value": 1200.0
+    "value": 280.0
   },
   "bot_skill": {
     "group": "Bots",
     "max": 1.0,
     "min": 0.0,
-    "value": 0.5
+    "value": 0.2
   },
   "bot_strafe_flip_time": {
     "group": "Bots",
@@ -147,7 +147,7 @@
     "group": "Bow",
     "max": 150.0,
     "min": 5.0,
-    "value": 42.0
+    "value": 28.0
   },
   "draw_max_deviation_deg": {
     "group": "Bow",
@@ -159,31 +159,31 @@
     "group": "Bow",
     "max": 3500.0,
     "min": 200.0,
-    "value": 1450.0
+    "value": 780.0
   },
   "draw_min_damage": {
     "group": "Bow",
     "max": 60.0,
     "min": 1.0,
-    "value": 14.0
+    "value": 10.0
   },
   "draw_min_speed": {
     "group": "Bow",
     "max": 2000.0,
     "min": 100.0,
-    "value": 700.0
+    "value": 480.0
   },
   "draw_time_full": {
     "group": "Bow",
     "max": 1.5,
     "min": 0.05,
-    "value": 0.28
+    "value": 0.45
   },
   "fighter_health": {
     "group": "Regen",
     "max": 400.0,
     "min": 40.0,
-    "value": 140.0
+    "value": 200.0
   },
   "fighter_radius": {
     "group": "Movement",
@@ -243,19 +243,19 @@
     "group": "Movement",
     "max": 9000.0,
     "min": 200.0,
-    "value": 2600.0
+    "value": 1800.0
   },
   "move_friction": {
     "group": "Movement",
     "max": 9000.0,
     "min": 200.0,
-    "value": 2200.0
+    "value": 1600.0
   },
   "move_speed": {
     "group": "Movement",
     "max": 900.0,
     "min": 50.0,
-    "value": 340.0
+    "value": 250.0
   },
   "number_size": {
     "group": "Feel",
@@ -273,7 +273,7 @@
     "group": "Quiver",
     "max": 5.0,
     "min": 0.1,
-    "value": 0.85
+    "value": 1.1
   },
   "quiver_size": {
     "group": "Quiver",
