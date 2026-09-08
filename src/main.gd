@@ -15,6 +15,8 @@ var _terrain: Terrain
 var _camera: CameraRig
 var _fx: Fx
 var _hud: Hud
+var _match_hud: MatchHud
+var _screens: MatchScreens
 var _view: GameView
 var _overlay: Node2D
 
@@ -65,6 +67,48 @@ func _ready() -> void:
 
 	_hud = Hud.new()
 	layer.add_child(_hud)
+
+	_match_hud = MatchHud.new()
+	_match_hud.setup(world.match_state)
+	layer.add_child(_match_hud)
+
+	# Above the HUD: the setup and results screens are modal, and the countdown
+	# has to sit over everything including the score.
+	var screen_layer := CanvasLayer.new()
+	screen_layer.layer = 2
+	add_child(screen_layer)
+
+	_screens = MatchScreens.new()
+	_screens.setup(world.match_state)
+	_screens.size_chosen.connect(_on_size_chosen)
+	_screens.dismissed.connect(_on_results_dismissed)
+	screen_layer.add_child(_screens)
+
+
+## Chosen on the setup screen. Team size is a simulation parameter read when the
+## world is built, so a new size means a new world rather than a resize — which
+## also gives every round a clean arena, full quivers and everyone on their
+## spawn.
+func _on_size_chosen(size: int) -> void:
+	Tuning.set_value("bot_team_size", float(size))
+	_rebuild_world()
+	world.match_state.begin_countdown()
+
+
+func _on_results_dismissed() -> void:
+	_rebuild_world()
+	world.match_state.begin_countdown()
+
+
+func _rebuild_world() -> void:
+	world = SimWorld.new(_terrain.arena if _terrain != null else null)
+	_camera.listen_to(world)
+	_fx.listen_to(world)
+	_view.setup(world, _terrain, controls, _camera)
+	_match_hud.setup(world.match_state)
+	_screens.setup(world.match_state)
+	_camera.position = world.player.position
+	_camera.target_position = world.player.position
 
 
 func _on_shot_released(aim: Vector2, draw_strength: float, snap: bool) -> void:

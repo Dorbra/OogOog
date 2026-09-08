@@ -163,6 +163,27 @@ a test fails if that changes.
 enemies able to focus one player, 3.3 hits was the "dead in a second" the same
 playtest reported.
 
+### The match: two minutes, first to six
+
+| | |
+|---|---|
+| **Length** | 2 minutes. Short enough that a five-year-old stays in it start to finish, and that losing badly is over quickly |
+| **Win** | First team to `match_target_kills` (6), or whoever leads when the clock runs out |
+| **Level at the clock** | **Not a draw.** Play continues until one side leads by one |
+| **Between rounds** | Results screen, then a tap. No auto-restart |
+
+**Six is a measured number, not a chosen one.** Across 24 simulated matches the
+target decided 0 of them at 15 and 0 at 10 — it would have been dead code. At 6
+it fires on about an eighth, which is the blowout backstop it is meant to be.
+Recorded in [ADR-0017](decisions/0017-the-match-is-sim-state.md).
+
+**Nothing on any of these screens is written down.** A five-year-old cannot read
+"3v3" or "BLUE WINS", so team size is a row of cats you tap, the countdown is a
+numeral, and the result is one team standing and one sitting with two
+colour-coded scores. No per-player statistics, ever: publishing who died most,
+every round, to the youngest player is the opposite of *competitive but not
+punishing*.
+
 ### Quiver: 5 arrows, one back every 1.1 s
 
 Lifted from Brawl Stars' ammo rhythm. It is not a resource to manage across a
@@ -284,23 +305,30 @@ is no image editor in this workflow.
 | M1.3 juice | done |
 | M2 arena cover | done |
 | M3.1 fighters, teams, **bots** | done |
-| **M3.2 match loop — timer, score, results** | **next** |
+| M3.1e pacing — nothing shoots from off-screen | done |
+| **M3.2 match loop — timer, score, results** | done |
+| **M3.3 LAN — the actual product goal** | **next** |
 | M4 content — 3 archers, abilities, pickups, sound | planned |
 | M5 polish — profiling, thermals, release build | planned |
 
-**Something fights back now.** Thirty seconds of a headless 3v3 produces 76
-shots, 31 hits and 2 kills with the player standing still, and that is asserted
-in CI rather than remembered.
+**Something fights back, and now a match ends.** Two minutes, first to six kills
+or whoever leads on the clock, then a results screen and a tap for the next
+round. Team size is picked from a row of cat icons before the whistle.
 
-**The honest summary is now different: a fight has no end.** Nobody wins, the
-score is not kept, and the match never stops. `feat/match-loop` is the milestone
-that makes it a game you can finish.
+**The honest summary is now different again: everyone is playing alone.** The
+whole point of this game is three people in one room, and until `feat/lan` lands
+the other five cats are bots. That is the last milestone between here and the
+thing the project is actually for.
 
 ---
 
 ## 8. Planned, in order
 
-1. **`feat/match-loop`** — player health, death, respawn, deathmatch to N kills,
+1. **`feat/lan`** — host, join, discovery. The three of you playing together,
+   which is the entire point. Blocked on nothing but work: the M3.0 spike proved
+   the transport on loopback at 7 ms, and the four questions it raised still need
+   two real phones on a real router to answer.
+2. **`feat/match-loop`** *(done — kept here for the ordering below)* — player health, death, respawn, deathmatch to N kills,
    countdown, results screen.
 2. **`chore/tech-debt`** — see [ARCHITECTURE.md §9](ARCHITECTURE.md#9-known-debt-stated-honestly).
 3. **`feat/super`** — an ability charged by **damage dealt, not a cooldown**.

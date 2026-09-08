@@ -33,14 +33,37 @@ var _trails: Array[Array] = []
 var _chip: Array[float] = []
 
 
+## Point the view at a world. Safe to call again with a NEW world between
+## rounds: the cat views are index-matched to SimWorld.fighters, so a match with
+## a different team size would otherwise leave this indexing a roster that no
+## longer exists.
 func setup(world: SimWorld, terrain: Terrain, controls: TouchControls, camera: CameraRig) -> void:
 	_world = world
 	_terrain = terrain
 	_controls = controls
 	_camera = camera
+	if is_node_ready():
+		_build()
 
 
 func _ready() -> void:
+	_build()
+
+
+func _build() -> void:
+	# Detach immediately rather than relying on queue_free(), which is deferred:
+	# the old cats would otherwise still be children for a frame and draw over
+	# the new roster.
+	for view in _fighter_views:
+		remove_child(view)
+		view.queue_free()
+	_fighter_views.clear()
+	_chip.clear()
+	_trails.clear()
+	if _canopy != null:
+		remove_child(_canopy)
+		_canopy.queue_free()
+
 	for _i in _world.arrows.size():
 		_trails.append([])
 

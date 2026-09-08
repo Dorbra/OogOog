@@ -239,3 +239,40 @@ func test_a_match_always_ends() -> void:
 
 	_runner.check(ended, _fail("the match resolves rather than running forever"))
 	_runner.check(w.match_state.winner >= 0, _fail("and it names a winner"))
+
+
+func test_the_team_size_picker_actually_changes_the_roster() -> void:
+	# What the setup screen does, asserted at the seam it does it through.
+	# The picker writes bot_team_size and rebuilds the world; if SimWorld ever
+	# stopped reading that key the screen would still look like it worked.
+	for size in [1, 2, 3]:
+		_tune("bot_team_size", float(size))
+		var w := SimWorld.new()
+		_runner.check(
+			w.fighters.size() == size * 2,
+			_fail("a side of %d makes %d fighters, got %d" % [size, size * 2, w.fighters.size()])
+		)
+		var team_a := 0
+		for f in w.fighters:
+			if f.team == 0:
+				team_a += 1
+		_runner.check(team_a == size, _fail("%d of them on team 0" % size))
+	_restore()
+
+
+func test_every_fighter_still_spawns_on_open_ground_at_any_team_size() -> void:
+	# The arena has three spawn cells a side. A smaller roster takes a subset,
+	# and a subset chosen wrongly could put two cats on one cell or one inside
+	# stone — neither of which the size test above would notice.
+	for size in [1, 2, 3]:
+		_tune("bot_team_size", float(size))
+		var w := SimWorld.new()
+		var seen := {}
+		for f in w.fighters:
+			var cell := w.arena.cell_at(f.position)
+			_runner.check(
+				not w.arena.is_solid(cell.x, cell.y), _fail("spawn is open at size %d" % size)
+			)
+			seen[f.position] = true
+		_runner.check(seen.size() == w.fighters.size(), _fail("no two share a spawn"))
+	_restore()
