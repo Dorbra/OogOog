@@ -396,3 +396,32 @@ func test_the_line_of_fire_stays_on_screen_after_the_shot() -> void:
 		_fail("reticle_enabled 0 draws nothing either way")
 	)
 	Tuning.set_value("reticle_enabled", was)
+
+
+## The ammo row must never outgrow the cat, at any magazine size.
+##
+## Pips were a flat 9 px each, so the ROW grew with the magazine: 57 px at five
+## rounds against a 58 px cat, and 117 px at ten — a bar twice as wide as the
+## animal it belongs to. Pips shrink now instead. magazine_size is a slider that
+## goes to 12, so this is checked across the whole range rather than at the one
+## value that happens to ship.
+func test_the_ammo_row_never_outgrows_the_cat() -> void:
+	var radius := Tuning.get_value("fighter_radius")
+	var gap := 3.0
+	var limit := radius * GameView.MAGAZINE_ROW_SPAN
+
+	for capacity in range(1, 13):
+		var w := GameView.magazine_pip_width(capacity, radius, gap)
+		var total := float(capacity) * w + float(capacity - 1) * gap
+		_runner.check(
+			total <= limit + 0.01,
+			_fail("%d rounds span %.0f px, limit is %.0f" % [capacity, total, limit])
+		)
+		_runner.check(w > 0.0, _fail("%d rounds still have a visible pip" % capacity))
+
+	# And a small magazine keeps the original chunky pip rather than stretching
+	# to fill the row — the fix is a cap, not a rescale.
+	_runner.check(
+		is_equal_approx(GameView.magazine_pip_width(5, radius, gap), 9.0),
+		_fail("five rounds keep the 9 px pip they always had")
+	)
