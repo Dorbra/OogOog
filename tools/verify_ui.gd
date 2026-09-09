@@ -126,6 +126,8 @@ func _run(main: Node) -> void:
 	await process_frame
 	_check(chosen.size() > before, "tapping play starts a match")
 
+	_check_override_badge()
+
 	# And the results screen must be dismissable, or a finished round traps you
 	# exactly as the setup screen did.
 	var dismissed := []
@@ -139,6 +141,56 @@ func _run(main: Node) -> void:
 	_check(dismissed.size() > 0, "tapping the results screen starts the next round")
 
 	_report()
+
+
+## The stale-tuning badge must actually be ON SCREEN, not merely constructed.
+##
+## A saved user://tuning.json overrides the shipped defaults key by key and
+## survives an APK update, so two releases were judged on values the device was
+## not running. The badge is the only thing that says so. Testing
+## Tuning.overridden_keys() proves the DATA is right and proves nothing about
+## whether anybody can see it — which is the exact gap that shipped an untappable
+## setup screen (ADR-0019).
+func _check_override_badge() -> void:
+	var overlay: Node = root.get_node_or_null("DebugOverlay")
+	_check(overlay != null, "the debug overlay exists")
+	if overlay == null:
+		return
+
+	var badge: Variant = overlay.get("_override_badge")
+	_check(badge != null, "the tuning panel has an override badge")
+	if badge == null:
+		return
+
+	# Reached through the tree, never named directly. Writing `Tuning` here would
+	# resolve at COMPILE time, and a --script file compiles before autoloads
+	# exist — the same reason SETUP and OVER above are plain integers.
+	var tuning: Node = root.get_node_or_null("Tuning")
+	_check(tuning != null, "the tuning autoload is reachable")
+	if tuning == null:
+		return
+
+	# Clean build: nothing saved, so the badge must be silent rather than
+	# crying wolf every launch.
+	tuning.call("reset")
+	overlay.call("_refresh_override_badge")
+	_check(not badge.visible, "with nothing saved the badge is hidden")
+
+	# Now the case it exists for.
+	var speed: float = tuning.call("get_value", "move_speed")
+	tuning.call("set_value", "move_speed", speed + 13.0)
+	tuning.call("save")
+	overlay.call("_refresh_override_badge")
+	_check(badge.visible, "after a Save the badge is visible")
+	_check(
+		"move_speed" in String(badge.text),
+		"and it names the overridden key (got %s)" % String(badge.text)
+	)
+
+	# Leave the machine as it was found: this writes a real user:// file.
+	tuning.call("reset")
+	overlay.call("_refresh_override_badge")
+	_check(not badge.visible, "and Reset makes it go away again")
 
 
 func _report() -> void:

@@ -19,6 +19,7 @@ var _net_label: Label
 var _host_list: VBoxContainer
 var _address_edit: LineEdit
 var _sliders: Dictionary = {}
+var _override_badge: Label
 var _open := false
 
 
@@ -114,6 +115,13 @@ func _build_tuning_tab() -> Control:
 	box.add_theme_constant_override("separation", 6)
 	scroll.add_child(box)
 
+	# Above the buttons on purpose: it is the first thing to read when the game
+	# is not behaving like the release notes say it should.
+	_override_badge = Label.new()
+	_override_badge.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_override_badge.modulate = Color(1.0, 0.72, 0.2)
+	box.add_child(_override_badge)
+
 	var buttons := HBoxContainer.new()
 	box.add_child(buttons)
 
@@ -134,6 +142,8 @@ func _build_tuning_tab() -> Control:
 	reset_button.focus_mode = Control.FOCUS_NONE
 	reset_button.pressed.connect(func() -> void: Tuning.reset())
 	buttons.add_child(reset_button)
+
+	_refresh_override_badge()
 
 	var groups := Tuning.grouped_keys()
 	for group: String in groups:
@@ -173,7 +183,26 @@ func _build_slider_row(key: String) -> Control:
 	return row
 
 
+## Shown only when saved on-device values are winning over the shipped ones.
+##
+## Without this the override is invisible: two releases were judged on values
+## the device was not running, because a saved user://tuning.json silently beats
+## anything shipped and survives an APK update. Reset, next to it, is the cure.
+func _refresh_override_badge() -> void:
+	if _override_badge == null:
+		return
+	var keys := Tuning.overridden_keys()
+	_override_badge.visible = not keys.is_empty()
+	if keys.is_empty():
+		return
+	_override_badge.text = (
+		"%d value(s) SAVED ON THIS DEVICE, overriding the build: %s\nTap Reset to run what was shipped."
+		% [keys.size(), ", ".join(keys)]
+	)
+
+
 func _sync_sliders_from_tuning() -> void:
+	_refresh_override_badge()
 	for key: String in _sliders:
 		var v := Tuning.get_value(key)
 		_sliders[key]["slider"].set_value_no_signal(v)
