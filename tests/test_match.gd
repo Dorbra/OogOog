@@ -72,7 +72,7 @@ func test_the_world_attributes_a_real_arrow_kill() -> void:
 	w.match_state.phase = MatchState.Phase.LIVE
 	var foe: Fighter = w.enemies_of(w.player.team)[0]
 
-	w.apply_damage(foe, 99999.0, Vector2.RIGHT, true, w.player.team)
+	w.apply_damage(foe, 99999.0, Vector2.RIGHT, w.player.team)
 	_runner.check(not foe.alive(), _fail("the blow was lethal"))
 	_runner.check(w.match_state.scores[w.player.team] == 1, _fail("the shooter's team scored"))
 
@@ -87,7 +87,7 @@ func test_a_team_never_scores_for_killing_its_own() -> void:
 			break
 	_runner.check(mate != null, _fail("the player has a teammate"))
 
-	w.apply_damage(mate, 99999.0, Vector2.RIGHT, true, w.player.team)
+	w.apply_damage(mate, 99999.0, Vector2.RIGHT, w.player.team)
 	_runner.check(not mate.alive(), _fail("the blow was lethal"))
 	_runner.check(w.match_state.scores[w.player.team] == 0, _fail("no point for a own goal"))
 
@@ -191,18 +191,18 @@ func test_the_countdown_freezes_the_world_and_then_releases_it() -> void:
 	_restore()
 
 
-func test_no_arrow_flies_while_the_match_is_over() -> void:
+func test_no_bullet_flies_while_the_match_is_over() -> void:
 	var w := SimWorld.new()
 	w.match_state.phase = MatchState.Phase.LIVE
-	var arrow: Arrow = w.arrows[0]
-	arrow.launch(w.player.position, Vector2.RIGHT, 1200.0, 25.0, 5.0, w.player.team)
-	var launched := arrow.position
+	var bullet: Bullet = w.bullets[0]
+	bullet.launch(w.player.position, Vector2.RIGHT, 1200.0, 25.0, 5.0, w.player.team)
+	var launched := bullet.position
 
 	w.match_state.phase = MatchState.Phase.OVER
 	for _i in 60:
 		w.tick(InputCommand.new(), DT)
 
-	_runner.check(arrow.position.is_equal_approx(launched), _fail("arrows hold their place"))
+	_runner.check(bullet.position.is_equal_approx(launched), _fail("arrows hold their place"))
 
 
 func test_a_new_match_starts_from_zero() -> void:

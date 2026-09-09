@@ -3,7 +3,7 @@ extends Control
 ## Screen-space overlay: the build stamp, and nothing else.
 ##
 ## Ammo pips used to live here, at the bottom of the screen. They moved into
-## GameView and are now drawn in world space under the player — counting arrows
+## GameView and are now drawn in world space under the player — counting rounds
 ## should not mean looking away from the fight. There is deliberately no
 ## duplicate readout: two places showing the same number is two places to drift.
 

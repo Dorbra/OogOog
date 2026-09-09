@@ -28,13 +28,12 @@ func test_hit_emits_once_with_applied_damage() -> void:
 	var target: Fighter = w.enemies_of(w.player.team)[0]
 
 	var events: Array = []
-	w.hit.connect(func(p, d, dmg, full): events.append({"p": p, "d": d, "dmg": dmg, "full": full}))
+	w.hit.connect(func(p, d, dmg): events.append({"p": p, "d": d, "dmg": dmg}))
 
-	w.apply_damage(target, 30.0, Vector2.RIGHT, false)
+	w.apply_damage(target, 30.0, Vector2.RIGHT)
 
 	_runner.check(events.size() == 1, _fail("exactly one hit event"))
 	_runner.check_near(events[0]["dmg"], 30.0, _fail("reports damage dealt"))
-	_runner.check(not events[0]["full"], _fail("full_draw flag passed through"))
 
 
 func test_overkill_reports_only_damage_actually_applied() -> void:
@@ -43,8 +42,8 @@ func test_overkill_reports_only_damage_actually_applied() -> void:
 	target.health.current = 12.0
 
 	var reported: Array = []
-	w.hit.connect(func(_p, _d, dmg, _f): reported.append(dmg))
-	w.apply_damage(target, 999.0, Vector2.RIGHT, true)
+	w.hit.connect(func(_p, _d, dmg): reported.append(dmg))
+	w.apply_damage(target, 999.0, Vector2.RIGHT)
 
 	# A 999 damage number over a 12 HP cat would be a lie the player can see.
 	_runner.check(reported.size() == 1, _fail("hit emitted for the fatal blow"))
@@ -60,11 +59,11 @@ func test_kill_emits_once_and_not_again_while_dead() -> void:
 	var kills: Array = []
 	w.killed.connect(func(_p, _d, _team): kills.append(true))
 
-	w.apply_damage(target, 50.0, Vector2.RIGHT, false)
+	w.apply_damage(target, 50.0, Vector2.RIGHT)
 	_runner.check(kills.size() == 1, _fail("kill emits on the fatal blow"))
 
 	# Hitting a corpse must not re-trigger the kill effects.
-	w.apply_damage(target, 50.0, Vector2.RIGHT, false)
+	w.apply_damage(target, 50.0, Vector2.RIGHT)
 	_runner.check(kills.size() == 1, _fail("no second kill event on a dead target"))
 
 
@@ -74,8 +73,8 @@ func test_damage_on_dead_target_emits_nothing() -> void:
 	target.health.current = 0.0
 
 	var hits: Array = []
-	w.hit.connect(func(_p, _d, _dmg, _f): hits.append(true))
-	w.apply_damage(target, 20.0, Vector2.RIGHT, false)
+	w.hit.connect(func(_p, _d, _dmg): hits.append(true))
+	w.apply_damage(target, 20.0, Vector2.RIGHT)
 	_runner.check(hits.is_empty(), _fail("no hit event for zero applied damage"))
 
 
@@ -84,7 +83,7 @@ func test_hit_applies_knockback_along_the_arrow() -> void:
 	var target: Fighter = w.enemies_of(w.player.team)[0]
 	target.velocity = Vector2.ZERO
 
-	w.apply_damage(target, 10.0, Vector2.RIGHT, false)
+	w.apply_damage(target, 10.0, Vector2.RIGHT)
 	_runner.check(target.velocity.x > 0.0, _fail("knocked along the shot direction"))
 	_runner.check_near(target.velocity.y, 0.0, _fail("no sideways knockback"))
 
@@ -92,7 +91,7 @@ func test_hit_applies_knockback_along_the_arrow() -> void:
 func test_knockback_decays_to_rest() -> void:
 	var w := _world()
 	var target: Fighter = w.enemies_of(w.player.team)[0]
-	w.apply_damage(target, 10.0, Vector2.RIGHT, false)
+	w.apply_damage(target, 10.0, Vector2.RIGHT)
 
 	for _i in 300:
 		target.tick(InputCommand.new(), 1.0 / 60.0, w.arena)

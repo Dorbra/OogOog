@@ -54,11 +54,27 @@ func _run_file(path: String) -> void:
 		_failures.append("%s: failed to load" % path)
 		return
 
-	# load() hands back a GDScript even when the file FAILED TO COMPILE, so the
-	# null check above is not enough: new() then returns null, no test in the
-	# file ever runs, and the suite reports PASS having quietly dropped an
-	# entire file. That is how test_bots.gd first went missing — a method name
-	# that clashed with Object._set() took the whole file out.
+	# load() hands back a GDScript even when the file FAILED TO COMPILE, and the
+	# null check above is not enough. There are two distinct ways a broken file
+	# disappears from this suite, and BOTH have happened:
+	#
+	#   1. new() returns null. No test runs, and without the check below the
+	#      suite reports PASS having quietly dropped an entire file. That is how
+	#      test_bots.gd first went missing — a method name that clashed with
+	#      Object._set() took the whole file out.
+	#   2. new() itself raises. On a PARSE error the engine prints SCRIPT ERROR,
+	#      ABANDONS this function, and returns to the caller as though the file
+	#      had been run — so not even the null check is reached and nothing is
+	#      appended. Two files vanished exactly this way during the gun rework,
+	#      and the only reason it was noticed was an unrelated assertion failing
+	#      in the same run.
+	#
+	# can_instantiate() is false for a script that did not compile, which is the
+	# one question that can be asked BEFORE the call that would abandon us.
+	if not script.can_instantiate():
+		_failures.append("%s: failed to compile — the whole file was skipped" % path.get_file())
+		return
+
 	var instance: Object = script.new()
 	if instance == null:
 		_failures.append("%s: failed to compile — the whole file was skipped" % path.get_file())

@@ -32,7 +32,7 @@ var prev_position: Vector2 = Vector2.ZERO
 var spawn_point: Vector2 = Vector2.ZERO
 
 var health := Health.new()
-var bow := Bow.new()
+var gun := Gun.new()
 
 ## Produces this fighter's InputCommand each tick. Null means nobody is driving,
 ## and the fighter stands still — which is both the practice-dummy behaviour and
@@ -65,7 +65,7 @@ func tick(cmd: InputCommand, delta: float, arena: Arena) -> void:
 		_tick_dead(delta)
 		return
 
-	bow.tick(delta)
+	gun.tick(delta)
 	_apply_movement(cmd.move, delta)
 	_integrate(delta, arena)
 
@@ -92,7 +92,7 @@ func respawn() -> void:
 	position = spawn_point
 	prev_position = spawn_point
 	reveal_timer = 0.0
-	bow = Bow.new()
+	gun = Gun.new()
 
 
 func take_damage(amount: float) -> float:

@@ -9,9 +9,10 @@ extends RefCounted
 ##     f_cmd = _command_for(f, delta)
 ##
 ## A bot therefore cannot cheat by construction. It cannot read Input, set a
-## position, or reach past the Bow to spawn an arrow — the only thing it can do
-## is fill in the same six fields the player fills in. When a bot out-shoots
-## you, it is because it aimed better, not because it had a different gun.
+## position, or reach past the Gun to spawn a bullet — the only thing it can do
+## is fill in the same fields the player fills in. When a bot out-shoots you, it
+## is because it aimed better, not because it had a different gun. Rate of fire
+## is enforced inside Gun for exactly that reason.
 
 enum State { SEEK, ENGAGE, RETREAT, LURK }
 
@@ -30,6 +31,10 @@ const STRAFE_LOOKAHEAD := 22.0
 ## bot oscillates around a point it can never stand exactly on.
 const WAYPOINT_TOLERANCE := 0.45
 
+## How close to its preferred range counts as "arrived", as a fraction of that
+## range. Inside this the bot stops closing and simply holds.
+const RANGE_DEADBAND := 0.12
+
 var state: int = State.SEEK
 
 # One command instance, refilled each tick. Allocating a new one per bot per
@@ -38,7 +43,7 @@ var state: int = State.SEEK
 var _cmd := InputCommand.new()
 
 # Each bot owns its RNG so aim scatter is reproducible in tests. Sharing
-# SimWorld's would make a bot's aim depend on how many arrows happened to be in
+# SimWorld's would make a bot's aim depend on how many bullets happened to be in
 # flight, which is exactly the kind of coupling that makes a failure unrepeatable.
 var _rng := RandomNumberGenerator.new()
 
@@ -59,16 +64,23 @@ var _reaction_timer: float = 0.0
 ## passed as an argument.
 var _target_id: int = 0
 
-var _strafe_timer: float = 0.0
 var _strafe_sign: float = 1.0
 
-# Builds toward draw_time_full and resets on release, so a bot pulls the string
-# at exactly the rate a thumb does. Without it a bot sets fire=true on every
-# tick and empties a five-arrow quiver in 83 ms, which no player can match — the
-# quiver alone does not gate that, it only decides when the burst stops.
-var _draw_accum: float = 0.0
+## Where in the strafe cycle this bot is. A bot used to apply a lateral term on
+## EVERY tick it could see anybody and reverse it every 1.2 s, so it never once
+## stood still — six of those read as frantic darting at any movement speed, and
+## no speed slider fixes it:
+##
+##     "characters move around too fast" (the enemies, not the player)
+##
+## Now each cycle is part strafe, part stand. Standing still is what makes a bot
+## readable, and being readable is what makes it hittable.
+var _strafe_phase: float = 0.0
 
-## The angular error of the shot currently being drawn, in radians.
+## The angular error of the shot about to be taken, in radians. Re-rolled once
+## per shot rather than per tick: committing to one wrong angle is how a person
+## misses, and averaging a fresh error every frame would make the bot's aim
+## converge on perfect while its head visibly vibrated.
 var _aim_jitter: float = 0.0
 
 var _last_known := Vector2.ZERO
@@ -81,6 +93,8 @@ var _patrol_index: int = 0
 func _init(rng_seed: int = 0) -> void:
 	_rng.seed = rng_seed
 	_strafe_sign = 1.0 if (rng_seed & 1) == 0 else -1.0
+	# Offset into the cycle, so a team does not stop and start as one body.
+	_strafe_phase = _rng.randf() * 2.0
 	# Fanned out by seed rather than all starting at zero, or a team's three bots
 	# would patrol in single file and search one third of the map between them.
 	_patrol_index = absi(rng_seed)
@@ -102,11 +116,11 @@ func think(me: Fighter, world: SimWorld, delta: float) -> InputCommand:
 
 	match state:
 		State.RETREAT:
-			_do_retreat(me, world, target, delta)
+			_do_retreat(me, world, target)
 		State.LURK:
 			_do_lurk(me)
 		State.ENGAGE:
-			_do_engage(me, world, target, delta)
+			_do_engage(me, world, target)
 		_:
 			_do_seek(me, world)
 
@@ -116,9 +130,13 @@ func think(me: Fighter, world: SimWorld, delta: float) -> InputCommand:
 func _tick_timers(delta: float) -> void:
 	_repath_timer = maxf(0.0, _repath_timer - delta)
 	_reaction_timer = maxf(0.0, _reaction_timer - delta)
-	_strafe_timer -= delta
-	if _strafe_timer <= 0.0:
-		_strafe_timer = Tuning.get_value("bot_strafe_flip_time")
+	# One cycle = one strafe segment plus one pause. The sign flips at the top of
+	# each cycle rather than on its own clock, so a bot commits to a direction
+	# for a whole segment instead of reversing mid-slide.
+	var period := maxf(Tuning.get_value("bot_strafe_flip_time"), 0.05)
+	_strafe_phase += delta
+	while _strafe_phase >= period:
+		_strafe_phase -= period
 		_strafe_sign = -_strafe_sign
 
 
@@ -190,13 +208,12 @@ func _do_seek(me: Fighter, world: SimWorld) -> void:
 	_cmd.move = _steer(me, world, goal)
 	if _cmd.move != Vector2.ZERO:
 		_cmd.aim = _cmd.move
-	_draw_accum = 0.0
 
 
 ## Backs off to somewhere the threat cannot shoot, and keeps shooting on the way
 ## out. Out-of-combat regen does the actual healing, so all a retreat has to do
 ## is break the line and survive the trip.
-func _do_retreat(me: Fighter, world: SimWorld, target: Fighter, delta: float) -> void:
+func _do_retreat(me: Fighter, world: SimWorld, target: Fighter) -> void:
 	var threat := _last_known if _has_last_known else me.position
 	var cover := _nearest_cover(world.arena, me.position, threat)
 	if cover != Vector2.INF:
@@ -205,7 +222,7 @@ func _do_retreat(me: Fighter, world: SimWorld, target: Fighter, delta: float) ->
 		_cmd.move = (me.position - threat).normalized()
 
 	if target != null:
-		_aim_and_fire(me, world, target, delta)
+		_aim_and_fire(me, world, target)
 	elif _cmd.move != Vector2.ZERO:
 		_cmd.aim = _cmd.move
 
@@ -214,30 +231,44 @@ func _do_retreat(me: Fighter, world: SimWorld, target: Fighter, delta: float) ->
 ## bot is deliberately doing nothing, because anything else reveals it.
 func _do_lurk(me: Fighter) -> void:
 	_forget_path()
-	_draw_accum = 0.0
 	if _has_last_known:
 		_cmd.aim = (_last_known - me.position).normalized()
 	else:
 		_cmd.aim = me.facing
 
 
-func _do_engage(me: Fighter, world: SimWorld, target: Fighter, delta: float) -> void:
+func _do_engage(me: Fighter, world: SimWorld, target: Fighter) -> void:
 	var to_target := target.position - me.position
 	var distance := to_target.length()
 	if distance < 0.001:
-		_aim_and_fire(me, world, target, delta)
+		_aim_and_fire(me, world, target)
 		return
 
 	var forward := to_target / distance
 	var preferred := Tuning.get_value("bot_preferred_range")
 
-	# Close if too far, back off if too near, and always circle. The radial
-	# term is proportional rather than a hard toward/away so a bot settles at
-	# its preferred range instead of jittering across it.
+	# Close if too far, back off if too near. Proportional rather than a hard
+	# toward/away, so a bot settles at its preferred range instead of jittering
+	# across it — and so it genuinely STOPS once it is there.
 	var radial := clampf((distance - preferred) / maxf(preferred, 1.0), -1.0, 1.0)
+
+	# A deadband, so a bot that has ARRIVED at its range stops there instead of
+	# creeping back and forth across it forever. Without it the radial term is
+	# never quite zero and a bot can never be still, which defeats the strafe
+	# pause below: the pause would only stop the circling, and the bot would go
+	# on shuffling toward and away from you the whole fight.
+	if absf(radial) < RANGE_DEADBAND:
+		radial = 0.0
+
 	var tangent := Vector2(-forward.y, forward.x) * _strafe_sign
 
-	var move := forward * radial + tangent * 0.85
+	# The lateral term applies only during the strafe part of the cycle. It used
+	# to apply on every tick, at 0.85, which is why six bots read as frantic
+	# darting: nothing ever stood still long enough to be looked at, let alone
+	# aimed at. Standing still is what makes a bot readable, and being readable
+	# is what makes it hittable.
+	var weight := Tuning.get_value("bot_strafe_weight") if _is_strafing() else 0.0
+	var move := forward * radial + tangent * weight
 	if move.length_squared() > 0.0001:
 		move = move.normalized()
 		# Strafing is unpathed, so a bot circling into a wall would grind along
@@ -247,12 +278,14 @@ func _do_engage(me: Fighter, world: SimWorld, target: Fighter, delta: float) -> 
 		var cell := world.arena.cell_at(ahead)
 		if world.arena.is_solid(cell.x, cell.y):
 			_strafe_sign = -_strafe_sign
-			_strafe_timer = Tuning.get_value("bot_strafe_flip_time")
+			# Restart the cycle so the bot commits to the new direction for a
+			# full segment rather than scraping back into the same wall.
+			_strafe_phase = 0.0
 			tangent = -tangent
-			move = (forward * radial + tangent * 0.85).normalized()
+			move = (forward * radial + tangent * weight).normalized()
 		_cmd.move = move
 
-	_aim_and_fire(me, world, target, delta)
+	_aim_and_fire(me, world, target)
 
 
 # --------------------------------------------------------------------- firing
@@ -260,72 +293,59 @@ func _do_engage(me: Fighter, world: SimWorld, target: Fighter, delta: float) -> 
 
 ## Aims at where the target will be, scatters the shot by the difficulty error,
 ## and refuses to shoot into stone.
-func _aim_and_fire(me: Fighter, world: SimWorld, target: Fighter, delta: float) -> void:
+func _aim_and_fire(me: Fighter, world: SimWorld, target: Fighter) -> void:
 	if target == null:
 		return
 
+	# Aim is set whatever happens below, so a bot that is reloading, out of
+	# range or blocked still faces its target rather than staring into space.
 	var aim := _lead(me, target)
-
-	if _reaction_timer > 0.0:
-		_draw_accum = 0.0
-		_cmd.aim = aim
-		return
-
-	# Do not draw on something the arrow cannot physically reach.
-	#
-	# This was missing entirely, and it is the other half of "the bots shoot at
-	# me from out-of-screen": a bot could acquire a target well beyond its own
-	# range and fire anyway, because the only gate below is whether a wall is in
-	# the way. The arrows died in mid-air, so nothing was ever hit by them — the
-	# player just saw shots arriving from somewhere off screen for no reason.
-	var reach_now := me.bow.speed_for(1.0) * Tuning.get_value("arrow_lifetime")
-	if me.position.distance_to(target.position) > reach_now:
-		_draw_accum = 0.0
-		_cmd.aim = aim
-		return
-
-	# Rolled once per shot, at the start of the draw, and held. Re-rolling it
-	# every tick would average the error away over a 0.28 s draw AND make the
-	# bot's head visibly vibrate; committing to one wrong angle is how a person
-	# misses, and it is what makes the difficulty slider read as skill.
-	if _draw_accum <= 0.0:
-		var error := deg_to_rad(_aim_error_deg())
-		_aim_jitter = _rng.randf_range(-error, error) if error > 0.0 else 0.0
-
-	aim = aim.rotated(_aim_jitter)
 	_cmd.aim = aim
 
-	var draw_time := maxf(Tuning.get_value("draw_time_full"), 0.0001)
-	_draw_accum += delta
-	_cmd.draw_strength = clampf(_draw_accum / draw_time, 0.0, 1.0)
-	if _cmd.draw_strength < 1.0:
+	if _reaction_timer > 0.0:
 		return
 
-	if not me.bow.can_fire():
-		# Hold at full draw rather than restarting: the shot goes the instant
-		# the quiver refills, which is what a player waiting on ammo does too.
+	# Do not shoot at something the bullet cannot physically reach.
+	#
+	# This is half of "the bots shoot at me from out-of-screen": a bot could
+	# acquire a target well beyond its own range and fire anyway, because the
+	# only gate below is whether a wall is in the way. The shots died in mid-air,
+	# so nothing was ever hit by them — the player just saw fire arriving from
+	# somewhere off screen for no reason.
+	if me.position.distance_to(target.position) > me.gun.reach():
 		return
 
-	# The same wall question the arrow itself will ask a tick from now. Firing
-	# into cover wastes the shot AND the refill, which at five arrows is most of
+	# Gun.consume() will refuse anyway; asking first avoids rolling an aim error
+	# for a shot that is not going to happen.
+	if not me.gun.can_fire():
+		return
+
+	# Rolled once per shot, at the instant of firing. There is no draw to hold it
+	# across any more, which is exactly why this is simpler than it was: a bot
+	# commits to one wrong angle per bullet, which is how a person misses, and
+	# the aim it DISPLAYS between shots stays clean so its head does not vibrate.
+	var error := deg_to_rad(_aim_error_deg())
+	if error > 0.0:
+		_aim_jitter = _rng.randf_range(-error, error)
+		aim = aim.rotated(_aim_jitter)
+		_cmd.aim = aim
+
+	# The same wall question the bullet itself will ask a tick from now. Firing
+	# into cover wastes the round AND the reload, which at five rounds is most of
 	# a fight's worth of ammunition.
 	var origin := me.position + aim * me.radius
-	var reach := me.bow.speed_for(1.0) * Tuning.get_value("arrow_lifetime")
-	var to := origin + aim * minf(reach, me.position.distance_to(target.position))
+	var to := origin + aim * minf(me.gun.reach(), me.position.distance_to(target.position))
 	if world.arena.cast_segment(origin, to)["hit"]:
-		# Relax the bow and start again, which re-rolls the aim error next tick.
-		# Holding the draw here instead looks reasonable and is a freeze: the
-		# jitter is rolled once per draw, so a blocked angle would be re-tested
-		# against the same wall forever and the bot would never shoot again.
-		# Found by a spread test that recorded zero shots in 1200 ticks.
-		_draw_accum = 0.0
+		# Simply do not fire. Next tick re-rolls the error against a fresh angle,
+		# so a blocked shot costs a tick rather than freezing the bot forever —
+		# which is what the old version did when it held one rolled angle against
+		# the same wall indefinitely.
 		return
 
 	_cmd.fire = true
-	_draw_accum = 0.0
 
 
-## Where to point so a travelling arrow and a moving target arrive together.
+## Where to point so a travelling bullet and a moving target arrive together.
 ##
 ## The prediction itself lives in Aim.intercept(), shared with the player's
 ## auto-aim. It used to live here and ONLY here, which is how the player's assist
@@ -336,7 +356,7 @@ func _aim_and_fire(me: Fighter, world: SimWorld, target: Fighter, delta: float) 
 func _lead(me: Fighter, target: Fighter) -> Vector2:
 	return Aim.intercept(
 		me.position,
-		me.bow.speed_for(1.0),
+		me.gun.speed(),
 		target.position,
 		target.velocity,
 		Tuning.get_value("bot_lead_factor") * _skill(),
@@ -467,6 +487,18 @@ func _nearest_bush(arena: Arena, from: Vector2, toward: Vector2) -> Vector2:
 # -------------------------------------------------------------------- skill
 
 
+## Is this bot in the moving part of its strafe cycle?
+##
+## `bot_strafe_duty` is the fraction of each cycle spent sliding sideways; the
+## remainder is spent standing. At 1.0 this reduces exactly to the old
+## always-strafing behaviour, which is what makes the duty cycle testable by
+## turning it off.
+func _is_strafing() -> bool:
+	var period := maxf(Tuning.get_value("bot_strafe_flip_time"), 0.05)
+	var duty := clampf(Tuning.get_value("bot_strafe_duty"), 0.0, 1.0)
+	return _strafe_phase < period * duty
+
+
 func _skill() -> float:
 	return clampf(Tuning.get_value("bot_skill"), 0.0, 1.0)
 
@@ -492,4 +524,3 @@ func _forget() -> void:
 	_target_id = 0
 	_has_last_known = false
 	_reaction_timer = 0.0
-	_draw_accum = 0.0

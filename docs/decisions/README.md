@@ -41,3 +41,5 @@ adapted: **Context → Decision → Consequences → Alternatives**.
 | [0019](0019-appearance-is-not-behaviour.md) | A capture proves it drew; only an input proves it works | Accepted |
 | [0020](0020-aim-assist-must-predict.md) | Aim assist must predict, or it is worse than nothing | Accepted |
 | [0021](0021-a-tuning-override-must-be-visible.md) | A saved tuning value must never override the build invisibly | Accepted |
+| [0022](0022-guns-supersede-archers.md) | Guns supersede archers; the draw curve is deleted | Accepted, supersedes the weapon choice in GAME_DESIGN |
+| [0023](0023-bots-must-stand-still.md) | A bot that never stands still cannot be read, or hit | Accepted |
