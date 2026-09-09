@@ -4,12 +4,23 @@ extends RefCounted
 ## These are the parts of M1 that can be verified without a phone — which makes
 ## them the parts worth testing hard.
 
+const DT := 1.0 / 60.0
+
 var _runner: Object
 var _case: String
 
 
 func _fail(label: String) -> String:
 	return "%s: %s" % [_case, label]
+
+
+## A live world with every bot switched off, so only the player moves.
+func _world() -> SimWorld:
+	var w := SimWorld.new()
+	w.match_state.phase = MatchState.Phase.LIVE
+	for i in range(1, w.fighters.size()):
+		w.fighters[i].controller = null
+	return w
 
 
 ## Every shot is identical, and that is the property worth pinning.
@@ -200,6 +211,11 @@ func test_a_dragged_release_goes_where_it_was_dragged() -> void:
 	var origin := Vector2(900, 300)
 	controls._assign_finger(0, origin)
 	controls._aim_current = origin + Vector2(0, -200)
+	# Pumped, not skipped. The shot now goes along aim_vector — the smoothed
+	# direction the preview actually draws — so a test that sets the drag and
+	# releases without ever running the aim update is testing a path the game
+	# does not have.
+	controls._update_aim(1.0 / 60.0)
 	controls._release_finger(0)
 
 	_runner.check(shots.size() == 1, _fail("the dragged release fired"))
@@ -231,3 +247,152 @@ func test_a_long_careful_drag_is_still_an_aimed_shot() -> void:
 
 	_runner.check(shots.size() == 1, _fail("it still fires on release"))
 	_runner.check(not shots[0][1], _fail("and is still an aimed shot, not a tap"))
+
+
+# ------------------------------------------------- the aim outlives the shot
+
+
+## THE COMPLAINT, AS AN ASSERTION.
+##
+## Releasing used to zero the aim, and Fighter.tick() falls through to the
+## MOVEMENT direction when the aim is zero — so the cat swung to face wherever it
+## was walking the instant you shot, and the gun barrel swung with it. There was
+## no line of fire to keep.
+func test_the_aim_survives_the_shot_and_walking_does_not_move_it() -> void:
+	var w := _world()
+	var cmd := InputCommand.new()
+
+	# Aim hard left and fire.
+	cmd.aim = Vector2.LEFT
+	cmd.fire = true
+	w.tick(cmd, DT)
+	var after_shot := w.player.facing
+	_runner.check(
+		after_shot.distance_to(Vector2.LEFT) < 0.01,
+		_fail("firing points the cat where it fired, got %s" % str(after_shot))
+	)
+
+	# Now walk the other way for a full second, aiming at nothing.
+	cmd.clear()
+	cmd.move = Vector2.RIGHT
+	for _i in 60:
+		w.tick(cmd, DT)
+
+	_runner.check(
+		w.player.facing.distance_to(Vector2.LEFT) < 0.01,
+		_fail("a second of walking right leaves facing at %s" % str(w.player.facing))
+	)
+
+
+## The tap is the shot a five-year-old uses, and it is the one that would still
+## reset: _emit_shot() sends Vector2.ZERO for a tap because the caller auto-aims
+## it, so the firing tick would fall straight through to the movement branch.
+func test_a_tap_faces_where_it_actually_fired() -> void:
+	var w := _world()
+	var foe := w.enemies_of(w.player.team)[0]
+	# Put an enemy somewhere the auto-aim will find, and walk the other way.
+	foe.position = w.player.position + Vector2(0, -120)
+
+	var cmd := InputCommand.new()
+	cmd.fire = true
+	cmd.snap = true
+	cmd.move = Vector2.RIGHT
+	w.tick(cmd, DT)
+
+	_runner.check(
+		w.player.facing.y < -0.5,
+		_fail("a tap faces the target it auto-aimed at, got %s" % str(w.player.facing))
+	)
+
+
+## The preview draws along the SMOOTHED aim. Firing the raw drag meant a quick
+## flick put the bullet somewhere the dotted line had never pointed.
+func test_the_shot_goes_where_the_line_was_pointing() -> void:
+	var controls := TouchControls.new()
+	var shots: Array = []
+	controls.shot_fired.connect(func(aim: Vector2, _snap: bool): shots.append(aim))
+
+	var origin := Vector2(900, 300)
+	controls._assign_finger(0, origin)
+
+	# Establish an aim, then FLICK to a new direction and release immediately —
+	# one frame of smoothing, so aim_vector is nowhere near the raw drag.
+	controls._aim_current = origin + Vector2(0, -200)
+	controls._update_aim(DT)
+	controls._aim_current = origin + Vector2(200, 0)
+	controls._update_aim(DT)
+
+	var previewed := controls.aim_vector
+	controls._release_finger(0)
+
+	_runner.check(shots.size() == 1, _fail("the flick fired"))
+	_runner.check(
+		(shots[0] as Vector2).distance_to(previewed) < 0.001,
+		_fail("fired %s but the line was pointing %s" % [str(shots[0]), str(previewed)])
+	)
+	# And the mirror, or the above passes on a game where nothing smooths at all.
+	_runner.check(
+		previewed.distance_to(Vector2.RIGHT) > 0.05,
+		_fail("the flick really was mid-smoothing, got %s" % str(previewed))
+	)
+
+
+## No drag length may be classified as an aimed shot without having moved the
+## aim. Two thresholds used to disagree — snap_max_drag 26, aim_min_drag 40 — so
+## a drag in between fired along an aim nothing had updated.
+func test_no_drag_length_fires_along_an_aim_it_never_set() -> void:
+	var threshold := Tuning.get_value("snap_max_drag")
+	var lengths: Array[float] = [10.0, 20.0, 27.0, 30.0, 39.0, 45.0, 120.0]
+	for length in lengths:
+		var controls := TouchControls.new()
+		var shots: Array = []
+		controls.shot_fired.connect(func(aim: Vector2, snap: bool): shots.append([aim, snap]))
+
+		var origin := Vector2(900, 300)
+		controls._assign_finger(0, origin)
+		controls._aim_current = origin + Vector2(0, -length)
+		controls._update_aim(DT)
+		controls._release_finger(0)
+
+		var is_tap: bool = shots[0][1]
+		if length < threshold:
+			_runner.check(is_tap, _fail("a %.0f px drag is a tap" % length))
+			continue
+		_runner.check(not is_tap, _fail("a %.0f px drag is an aimed shot" % length))
+		_runner.check(
+			(shots[0][0] as Vector2).distance_to(Vector2.UP) < 0.001,
+			(
+				_fail("and a %.0f px aimed shot points where it was dragged, got %s")
+				% [length, str(shots[0][0])]
+			)
+		)
+
+
+## The line of fire stays on screen after the shot.
+##
+## Half of "keep a line-of-fire" is the cat still pointing that way; the other
+## half is being able to SEE it. The preview used to return early unless a thumb
+## was down, so the moment you released there was nothing on screen telling you
+## where the next shot would go.
+##
+## Asserted through GameView.aim_line_strength() rather than a rendered frame:
+## no render mode has a thumb on the screen, so a capture cannot distinguish
+## "drawn dim" from "not drawn at all".
+func test_the_line_of_fire_stays_on_screen_after_the_shot() -> void:
+	_runner.check(
+		is_equal_approx(GameView.aim_line_strength(true), 1.0),
+		_fail("pointing draws the line at full strength")
+	)
+
+	var idle := GameView.aim_line_strength(false)
+	_runner.check(idle > 0.0, _fail("and it is still drawn with the thumb up, got %.2f" % idle))
+	_runner.check(idle < 1.0, _fail("but dimmer than while pointing, got %.2f" % idle))
+
+	# The off switch still switches it off, in both states.
+	var was := Tuning.get_value("reticle_enabled")
+	Tuning.set_value("reticle_enabled", 0.0)
+	_runner.check(
+		GameView.aim_line_strength(true) == 0.0 and GameView.aim_line_strength(false) == 0.0,
+		_fail("reticle_enabled 0 draws nothing either way")
+	)
+	Tuning.set_value("reticle_enabled", was)

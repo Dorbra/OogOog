@@ -104,17 +104,28 @@ projectile slow enough that a target drifted 1.14 cat-widths during its flight:
 So the draw curve is **deleted, not turned down**
 ([ADR-0022](decisions/0022-guns-supersede-archers.md)).
 
-### Tap to fire
+### Tap to fire, and the aim stays put
 
 - **Press** on the right half starts a gesture and fires **nothing**.
-- **Release** fires one round immediately: in the drag direction if the drag
-  passed `snap_max_drag`, auto-aimed and **leading** if it did not.
-- Classified on **drag distance alone**. A hold threshold used to be half of it,
-  so a player lining up a careful shot had it silently reclassified as an
-  auto-aimed tap for taking too long.
+- **Release** fires one round immediately: along the line the preview drew if
+  the drag passed `snap_max_drag`, auto-aimed and **leading** if it did not.
+- Classified on **drag distance alone**, against **one** threshold. A hold
+  threshold used to be half of the decision, and a second distance threshold
+  (`aim_min_drag`, 40 px) used to disagree with the first (26 px) — so a drag
+  between them fired along an aim nothing had updated.
 - The rate limit lives in `Gun.consume()`, so the player and the bots are gated
   by the same code and a fast tapper has shots **refused rather than queued** —
   queueing would turn quick fingers back into lag.
+
+**The aim outlives the shot.** Once you have aimed, walking never turns you
+again: the cat holds the direction you last fired or pointed, and the dotted line
+stays on screen, dimmed, showing the shot you would take right now. Releasing
+used to zero the aim, which handed facing back to the movement direction — so the
+gun barrel swung away on every shot and there was no line of fire to keep
+([ADR-0024](decisions/0024-the-aim-outlives-the-shot.md)).
+
+Before the *first* aim, facing still follows travel, or six cats moonwalk out of
+their spawns at the start of a round.
 
 ### Auto-repeat
 

@@ -5,11 +5,11 @@
     "min": 0.0,
     "value": 4.0
   },
-  "aim_min_drag": {
-    "group": "Controls",
-    "max": 200.0,
+  "aim_line_idle_alpha": {
+    "group": "Aim assist",
+    "max": 1.0,
     "min": 0.0,
-    "value": 40.0
+    "value": 0.35
   },
   "aim_smoothing": {
     "group": "Controls",

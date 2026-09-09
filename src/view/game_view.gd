@@ -236,8 +236,35 @@ func _draw_bullets(alpha: float) -> void:
 ## The most recognisably Brawl Stars element in the game, and it directly
 ## answers the earlier "every twitch ruins the aim, hard to hit" complaint:
 ## it turns aiming from guesswork into something you can see before committing.
+## How strongly to draw the line of fire: 1.0 while pointing, dimmer while not.
+##
+## Static and taking the flag as an argument so the decision can be asserted
+## headlessly. The alternative was proving it through a rendered frame, and a
+## capture cannot show this at all — no render mode has a thumb on the screen —
+## so the choice was a testable function or no gate.
+static func aim_line_strength(is_aiming: bool) -> float:
+	if Tuning.get_value("reticle_enabled") < 0.5:
+		return 0.0
+	if is_aiming:
+		return 1.0
+	return clampf(Tuning.get_value("aim_line_idle_alpha"), 0.0, 1.0)
+
+
+## Drawn whether or not a thumb is down.
+##
+## It used to return early unless `is_aiming`, so the line vanished the moment
+## you released — and since the aim vanished with it, there was nothing to draw.
+## Now the aim persists, so the line persists too, dimmed: at any moment you can
+## see the shot you would take, which is what "keep a line-of-fire" means on a
+## screen. The bright version still marks the moment you are actively pointing.
 func _draw_aim_preview(alpha: float) -> void:
-	if not _controls.is_aiming or Tuning.get_value("reticle_enabled") < 0.5:
+	if Tuning.get_value("reticle_enabled") < 0.5:
+		return
+
+	# Dimmed when the thumb is up. The assist and the wall cast below run in BOTH
+	# states on purpose: a faint line that lies is worse than no faint line.
+	var strength := aim_line_strength(_controls.is_aiming)
+	if strength <= 0.0:
 		return
 
 	var pos := _world.player.render_position(alpha)
@@ -285,10 +312,10 @@ func _draw_aim_preview(alpha: float) -> void:
 	for i in dots:
 		var t := float(i) / float(maxi(dots - 1, 1))
 		var p := start.lerp(end, t)
-		var fade := (1.0 - t) * 0.7
+		var fade := (1.0 - t) * 0.7 * strength
 		draw_circle(p, lerpf(4.5, 2.0, t), Color(col.r, col.g, col.b, fade))
 
-	draw_arc(end, 18.0, 0.0, TAU, 20, Color(col.r, col.g, col.b, 0.8), 2.5)
+	draw_arc(end, 18.0, 0.0, TAU, 20, Color(col.r, col.g, col.b, 0.8 * strength), 2.5)
 
 
 ## Ammo under the hero, in WORLD space, where Brawl Stars puts it and where the
