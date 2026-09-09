@@ -55,7 +55,7 @@ func test_other_peoples_fights_never_shake_the_camera() -> void:
 	var rig := _rig_for(w)
 
 	var events := []
-	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float, _f: bool) -> void: events.append(1))
+	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float) -> void: events.append(1))
 
 	# Thirty seconds of a real 3v3 happening somewhere the player is not.
 	for _i in 1800:
@@ -74,7 +74,7 @@ func test_being_hit_yourself_does_shake_the_camera() -> void:
 	var rig := _rig_for(w)
 	rig.target_position = w.player.position
 
-	w.apply_damage(w.player, 10.0, Vector2.RIGHT, true, 1)
+	w.apply_damage(w.player, 10.0, Vector2.RIGHT, 1)
 	_runner.check(rig.trauma() > 0.0, _fail("a hit on you does shake"))
 	rig.free()
 
@@ -116,7 +116,7 @@ func test_being_hit_yourself_does_freeze_the_game() -> void:
 	var fx := Fx.new()
 	fx.listen_to(w)
 
-	w.apply_damage(w.player, 10.0, Vector2.RIGHT, true, 1)
+	w.apply_damage(w.player, 10.0, Vector2.RIGHT, 1)
 	_runner.check(fx.hitstop_left() > 0.0, _fail("a hit on you does freeze"))
 	fx.free()
 
@@ -141,7 +141,7 @@ func test_a_bot_will_not_fire_at_something_it_cannot_reach() -> void:
 		if f != bot and f != foe:
 			f.position = away
 
-	var reach := bot.bow.speed_for(1.0) * Tuning.get_value("arrow_lifetime")
+	var reach := bot.gun.speed() * Tuning.get_value("bullet_lifetime")
 
 	# Sight range is widened for this test on purpose. At the shipped defaults
 	# sight (230) and reach (226) are only 4 px apart, so "acquired but out of
@@ -165,7 +165,7 @@ func test_a_bot_will_not_fire_at_something_it_cannot_reach() -> void:
 	var ctrl := BotController.new(77)
 	var shots := 0
 	for _i in 240:
-		bot.bow.quiver = bot.bow.capacity()
+		bot.gun.magazine = bot.gun.capacity()
 		if ctrl.think(bot, w, DT).fire:
 			shots += 1
 	_runner.check(shots == 0, _fail("no arrows wasted on an unreachable target"))
@@ -176,7 +176,7 @@ func test_a_bot_will_not_fire_at_something_it_cannot_reach() -> void:
 	var near_ctrl := BotController.new(78)
 	var near_shots := 0
 	for _i in 240:
-		bot.bow.quiver = bot.bow.capacity()
+		bot.gun.magazine = bot.gun.capacity()
 		if near_ctrl.think(bot, w, DT).fire:
 			near_shots += 1
 	_runner.check(near_shots > 0, _fail("but it does shoot once you are in range"))

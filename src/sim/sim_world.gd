@@ -12,16 +12,16 @@ extends RefCounted
 ## never "was just hit, from that direction, for this much" — and every piece of
 ## feedback needs the latter. All damage funnels through apply_damage() so no
 ## code path can bypass these.
-signal hit(position: Vector2, direction: Vector2, damage: float, full_draw: bool)
+signal hit(position: Vector2, direction: Vector2, damage: float)
 ## `scoring_team` is the team that gets the point, or -1 when nobody does.
 ## Attribution has to travel with the event: the view can find the corpse from
 ## `position`, but no amount of looking at the world afterwards recovers who
-## fired the arrow.
+## fired the bullet.
 signal killed(position: Vector2, direction: Vector2, scoring_team: int)
-signal fired(position: Vector2, direction: Vector2, draw_strength: float)
-signal arrow_expired(position: Vector2)
+signal fired(position: Vector2, direction: Vector2)
+signal bullet_expired(position: Vector2)
 
-const ARROW_POOL_SIZE := 150
+const BULLET_POOL_SIZE := 150
 
 ## Upper bound on a side, and the number of spawn cells a team takes. The actual
 ## side size is the `bot_team_size` slider; this only caps what the arena's `P`
@@ -41,7 +41,7 @@ var match_state := MatchState.new()
 
 var player: Fighter
 var fighters: Array[Fighter] = []
-var arrows: Array[Arrow] = []
+var bullets: Array[Bullet] = []
 var arena: Arena
 var bounds: Rect2 = Rect2(0, 0, 1280, 720)
 
@@ -57,9 +57,9 @@ func _init(from_arena: Arena = null) -> void:
 	bounds = arena.bounds()
 	_rng.randomize()
 
-	arrows.resize(ARROW_POOL_SIZE)
-	for i in ARROW_POOL_SIZE:
-		arrows[i] = Arrow.new()
+	bullets.resize(BULLET_POOL_SIZE)
+	for i in BULLET_POOL_SIZE:
+		bullets[i] = Bullet.new()
 
 	_build_teams()
 	match_state.reset()
@@ -159,7 +159,7 @@ func tick(cmd: InputCommand, delta: float) -> void:
 		if f_cmd.fire and f.alive():
 			_try_fire(f, f_cmd)
 
-	_tick_arrows(delta)
+	_tick_bullets(delta)
 
 
 func _command_for(f: Fighter, delta: float) -> InputCommand:
@@ -168,14 +168,24 @@ func _command_for(f: Fighter, delta: float) -> InputCommand:
 	return f.controller.think(f, self, delta)
 
 
+## One shot. Every shot is the same shot.
+##
+## The gun itself decides whether it may fire — magazine and the fire-rate
+## cooldown both live in Gun.consume() — so the player and the bots are rate
+## limited by identical code. There is no path here that produces a faster or
+## stronger bullet for anybody.
+##
+## There is also no deviation any more. A random spread on top of a fast flat
+## bullet is precisely the "cant be expected" that got the bow replaced: the
+## line you aim along is the line the bullet takes.
 func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
-	if not shooter.bow.consume():
+	if not shooter.gun.consume():
 		return
 
 	var dir := cmd.aim
 	if cmd.snap:
-		# The snap shot is the fast, fully assisted option: it aims itself, and
-		# it LEADS. A tap that points at where the target already is cannot hit
+		# The tap shot is the fully assisted option: it aims itself, and it
+		# LEADS. A tap that points at where the target already is cannot hit
 		# anything that is moving, which is the whole reason a five-year-old taps
 		# in the first place.
 		var target := nearest_visible_enemy(
@@ -188,27 +198,23 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 	if not cmd.snap:
 		dir = assisted_aim(shooter, dir)
 
-	dir = shooter.bow.apply_deviation(dir, cmd.draw_strength, _rng)
-
-	var arrow := _free_arrow()
-	if arrow == null:
+	var bullet := _free_bullet()
+	if bullet == null:
 		return
 
 	var origin := shooter.position + dir * shooter.radius
-	arrow.launch(
+	bullet.launch(
 		origin,
 		dir,
-		shooter.bow.speed_for(cmd.draw_strength),
-		shooter.bow.damage_for(cmd.draw_strength, cmd.snap),
-		Tuning.get_value("arrow_lifetime"),
+		shooter.gun.speed(),
+		shooter.gun.damage(),
+		Tuning.get_value("bullet_lifetime"),
 		shooter.team
 	)
-	# A snap shot is never a "full draw" however long the thumb happened to rest.
-	arrow.full_draw = cmd.draw_strength >= 0.98 and not cmd.snap
 	# Shooting gives you away. Without this an ambusher in a bush is permanently
 	# invisible while killing people, which is not cover — it is a cheat.
 	shooter.reveal_timer = Tuning.get_value("reveal_time")
-	fired.emit(origin, dir, cmd.draw_strength)
+	fired.emit(origin, dir)
 
 
 ## A narrow magnetic nudge on aimed shots, toward the INTERCEPT rather than
@@ -216,7 +222,7 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 ##
 ## Public because the aim preview has to draw the shot that will actually be
 ## fired. It read `player.facing` and applied no assist at all, so the dotted
-## line was already up to `aim_assist_deg` away from where the arrow went — and a
+## line was already up to `aim_assist_deg` away from where the bullet went — and a
 ## leading assist widens that gap rather than closing it. The preview must not
 ## lie (ADR-0019), so it calls this.
 ##
@@ -249,68 +255,56 @@ func assisted_aim(shooter: Fighter, dir: Vector2) -> Vector2:
 	return dir.rotated(clampf(want, -max_angle, max_angle))
 
 
-## Where `shooter` must point to hit `target`, at full draw.
-##
-## Full draw rather than the current draw strength: under `auto_repeat` every
-## player shot is a full draw, and a snap shot is loosed the instant the thumb
-## lifts with no draw to read. Using a partial speed here would lead by too much
-## on the one shot that is hardest to place.
+## Where `shooter` must point to hit `target`.
 func _intercept(shooter: Fighter, target: Fighter) -> Vector2:
 	return Aim.intercept(
-		shooter.position,
-		shooter.bow.speed_for(1.0),
-		target.position,
-		target.velocity,
-		1.0,
-		shooter.facing
+		shooter.position, shooter.gun.speed(), target.position, target.velocity, 1.0, shooter.facing
 	)
 
 
-func _free_arrow() -> Arrow:
-	for arrow in arrows:
-		if not arrow.active:
-			return arrow
+func _free_bullet() -> Bullet:
+	for bullet in bullets:
+		if not bullet.active:
+			return bullet
 	return null
 
 
-func _tick_arrows(delta: float) -> void:
-	for arrow in arrows:
-		if not arrow.active:
+func _tick_bullets(delta: float) -> void:
+	for bullet in bullets:
+		if not bullet.active:
 			continue
 
-		var was_active := arrow.active
-		var from := arrow.position
-		arrow.tick(delta, bounds)
-		if not arrow.active:
+		var was_active := bullet.active
+		var from := bullet.position
+		bullet.tick(delta, bounds)
+		if not bullet.active:
 			if was_active:
-				arrow_expired.emit(arrow.position)
+				bullet_expired.emit(bullet.position)
 			continue
 
-		# Walls are checked BEFORE targets, and the arrow's segment is shortened
+		# Walls are checked BEFORE targets, and the bullet's segment is shortened
 		# to the impact point first — otherwise a target standing behind a wall
 		# would still be hit by a shot that should have been stopped by it.
-		var wall: Dictionary = arena.cast_segment(from, arrow.position)
+		var wall: Dictionary = arena.cast_segment(from, bullet.position)
 		if wall["hit"]:
-			arrow.position = wall["point"]
+			bullet.position = wall["point"]
 
 		for f in fighters:
 			if not f.alive():
 				continue
 			# Friendly fire is off. Checked here rather than in apply_damage so
-			# the arrow flies THROUGH a teammate rather than stopping dead on
+			# the bullet flies THROUGH a teammate rather than stopping dead on
 			# one, which would make your own team into cover.
-			if f.team == arrow.owner_team:
+			if f.team == bullet.owner_team:
 				continue
-			if arrow.hits_circle(f.position, f.radius):
-				apply_damage(
-					f, arrow.damage, arrow.velocity.normalized(), arrow.full_draw, arrow.owner_team
-				)
-				arrow.deactivate()
+			if bullet.hits_circle(f.position, f.radius):
+				apply_damage(f, bullet.damage, bullet.velocity.normalized(), bullet.owner_team)
+				bullet.deactivate()
 				break
 
-		if arrow.active and wall["hit"]:
-			arrow.deactivate()
-			arrow_expired.emit(arrow.position)
+		if bullet.active and wall["hit"]:
+			bullet.deactivate()
+			bullet_expired.emit(bullet.position)
 
 
 ## The single funnel for every point of damage in the game.
@@ -323,14 +317,14 @@ func _tick_arrows(delta: float) -> void:
 ## which is what any future hazard or fall damage would be. A kill only ever
 ## scores for a team that actually earned it.
 func apply_damage(
-	target: Fighter, amount: float, direction: Vector2, full_draw: bool, attacker_team: int = -1
+	target: Fighter, amount: float, direction: Vector2, attacker_team: int = -1
 ) -> void:
 	var applied := target.take_damage(amount)
 	if applied <= 0.0:
 		return
 
 	target.apply_knockback(direction, Tuning.get_value("knockback_force"))
-	hit.emit(target.position, direction, applied, full_draw)
+	hit.emit(target.position, direction, applied)
 
 	if target.health.died_this_tick:
 		target.health.died_this_tick = false

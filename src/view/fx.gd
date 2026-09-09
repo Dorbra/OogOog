@@ -79,11 +79,18 @@ func _on_screen(pos: Vector2) -> bool:
 	return delta.x <= half.x and delta.y <= half.y
 
 
-func _on_hit(pos: Vector2, dir: Vector2, damage: float, full_draw: bool) -> void:
+## Every hit looks the same now, because every hit IS the same.
+##
+## The burst and the ring used to come in two sizes, scaled by whether the shot
+## was a committed full draw — visibly rewarding the draw rather than making the
+## player take it on trust. With the draw curve gone there is nothing left to
+## reward, and keeping two sizes would mean picking one arbitrarily and dressing
+## it up as meaning.
+func _on_hit(pos: Vector2, dir: Vector2, damage: float) -> void:
 	if _on_screen(pos):
-		spawn_burst(pos, -dir, 10 if full_draw else 6, Palette.ARROW)
-		spawn_ring(pos, 14.0, 52.0 if full_draw else 38.0)
-		spawn_number(pos, damage, full_draw)
+		spawn_burst(pos, -dir, 8, Palette.ARROW)
+		spawn_ring(pos, 14.0, 45.0)
+		spawn_number(pos, damage)
 	if _concerns_player(pos):
 		hitstop(Tuning.get_value("hitstop_hit"))
 
@@ -96,12 +103,11 @@ func _on_killed(pos: Vector2, dir: Vector2, _scoring_team: int) -> void:
 		hitstop(Tuning.get_value("hitstop_kill"))
 
 
-func _on_fired(pos: Vector2, dir: Vector2, draw_strength: float) -> void:
-	# A brief flash at the bow, scaled by commitment: a snap shot should not
-	# look like a fully drawn one.
+func _on_fired(pos: Vector2, dir: Vector2) -> void:
+	# A brief muzzle flash. One size, for the same reason as _on_hit().
 	if not _on_screen(pos):
 		return
-	spawn_burst(pos, dir, int(lerpf(2.0, 7.0, draw_strength)), Palette.ARROW_TIP)
+	spawn_burst(pos, dir, 5, Palette.ARROW_TIP)
 
 
 ## Freezes everything briefly. The single largest perceived-impact effect
@@ -145,7 +151,7 @@ func spawn_ring(pos: Vector2, from_radius: float, to_radius: float) -> void:
 	r["max_life"] = 0.26
 
 
-func spawn_number(pos: Vector2, damage: float, full_draw: bool) -> void:
+func spawn_number(pos: Vector2, damage: float) -> void:
 	var n := _free(_numbers)
 	if n.is_empty():
 		return
@@ -154,9 +160,6 @@ func spawn_number(pos: Vector2, damage: float, full_draw: bool) -> void:
 	n["life"] = 0.8
 	n["max_life"] = 0.8
 	n["text"] = str(int(round(damage)))
-	# Full-draw hits get their own colour and size so committing to the draw is
-	# visibly rewarded, rather than being something the player has to be told.
-	n["full"] = full_draw
 
 
 ## Returns an empty Dictionary when the pool is exhausted. Callers must test
@@ -249,9 +252,8 @@ func _draw_numbers() -> void:
 		if n["life"] <= 0.0:
 			continue
 		var fade: float = clampf(n["life"] / n["max_life"] * 2.2, 0.0, 1.0)
-		var full: bool = n["full"]
-		var size := int(Tuning.get_value("number_size") * (1.35 if full else 1.0))
-		var col := Palette.ARROW_TIP if full else Color.WHITE
+		var size := int(Tuning.get_value("number_size"))
+		var col := Color.WHITE
 		draw_string(
 			font,
 			n["pos"],

@@ -4,7 +4,7 @@ extends RefCounted
 ## This file exists because that invariant was violated in the shipped build and
 ## nothing noticed. In M3.1c the arrow's range was cut to 652 px and compared
 ## against the 711 px visible width — but the player sits at the CENTRE of the
-## view, so the number that mattered was the half-width, 356. Arrows out-ranged
+## view, so the number that mattered was the half-width, 356. Shots out-ranged
 ## what you could see by 1.8x, bots held station at 380 px on purpose, and the
 ## first real playtest was "the bots shot at me from out-of-screen and I'm dead
 ## in a second. UNPLAYABLE."
@@ -31,10 +31,10 @@ func _visible_half() -> Vector2:
 
 
 func _reach() -> float:
-	return Tuning.get_value("draw_max_speed") * Tuning.get_value("arrow_lifetime")
+	return Tuning.get_value("bullet_speed") * Tuning.get_value("bullet_lifetime")
 
 
-func test_an_arrow_cannot_out_range_the_visible_screen() -> void:
+func test_a_bullet_cannot_out_range_the_visible_screen() -> void:
 	# The headline rule: if something can hit you, you can see it coming.
 	# Against the SMALLER half — the vertical one, because the view is landscape.
 	# Testing the width alone leaves a band where a bot directly above you is out
@@ -45,7 +45,7 @@ func test_an_arrow_cannot_out_range_the_visible_screen() -> void:
 	_runner.check(
 		_reach() <= tightest,
 		_fail(
-			"arrow reach %.0f fits the %.0f px half-view in EVERY direction" % [_reach(), tightest]
+			"bullet reach %.0f fits the %.0f px half-view in EVERY direction" % [_reach(), tightest]
 		)
 	)
 
@@ -64,13 +64,13 @@ func test_bots_fight_inside_the_visible_box() -> void:
 	)
 
 
-func test_nothing_targets_beyond_what_the_bow_can_reach() -> void:
+func test_nothing_targets_beyond_what_the_gun_can_reach() -> void:
 	# Auto-aim locking onto something out of range is a promise the bow cannot
 	# keep — the same reasoning that cut autoaim_radius in M3.1c, now asserted
 	# rather than remembered. The 15% headroom is for a target walking in.
 	_runner.check(
 		Tuning.get_value("autoaim_radius") <= _reach() * 1.15,
-		_fail("autoaim stays within bow range")
+		_fail("autoaim stays within gun range")
 	)
 
 
@@ -125,5 +125,5 @@ func test_a_fighter_survives_more_than_a_moment() -> void:
 	# player, a time-to-kill under four hits is the "dead in a second" the first
 	# playtest reported. Deliberately loose — it pins the disaster case, not the
 	# balance, which is settled with thumbs.
-	var hits := Tuning.get_value("fighter_health") / maxf(Tuning.get_value("draw_max_damage"), 0.01)
-	_runner.check(hits >= 4.0, _fail("a full-draw kill takes at least four hits, got %.1f" % hits))
+	var hits := Tuning.get_value("fighter_health") / maxf(Tuning.get_value("bullet_damage"), 0.01)
+	_runner.check(hits >= 4.0, _fail("a kill takes at least four hits, got %.1f" % hits))

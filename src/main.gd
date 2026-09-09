@@ -23,10 +23,9 @@ var _overlay: Node2D
 var _cmd := InputCommand.new()
 var _tick: int = 0
 
-# Set for exactly one tick by the release signal, then consumed by the sim.
+# Set for exactly one tick by the fire signal, then consumed by the sim.
 var _pending_shot := false
 var _pending_aim := Vector2.ZERO
-var _pending_draw := 0.0
 var _pending_snap := false
 
 
@@ -37,7 +36,7 @@ func _ready() -> void:
 
 	controls = TouchControls.new()
 	add_child(controls)
-	controls.shot_released.connect(_on_shot_released)
+	controls.shot_fired.connect(_on_shot_fired)
 
 	_camera = CameraRig.new()
 	_camera.world_size = arena.bounds().size
@@ -111,10 +110,9 @@ func _rebuild_world() -> void:
 	_camera.target_position = world.player.position
 
 
-func _on_shot_released(aim: Vector2, draw_strength: float, snap: bool) -> void:
+func _on_shot_fired(aim: Vector2, snap: bool) -> void:
 	_pending_shot = true
 	_pending_aim = aim
-	_pending_draw = draw_strength
 	_pending_snap = snap
 
 
@@ -125,12 +123,10 @@ func _physics_process(delta: float) -> void:
 	_cmd.tick = _tick
 	_cmd.move = controls.move_vector
 	_cmd.aim = controls.aim_vector
-	_cmd.draw_strength = controls.draw_strength
 
 	if _pending_shot:
 		_cmd.fire = true
 		_cmd.aim = _pending_aim
-		_cmd.draw_strength = _pending_draw
 		_cmd.snap = _pending_snap
 		_pending_shot = false
 

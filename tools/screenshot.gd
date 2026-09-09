@@ -69,7 +69,7 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 			return
 		_stage_target(world)
 		world.hit.connect(
-			func(_p: Vector2, _d: Vector2, _dmg: float, _f: bool) -> void: _hit_seen.append(true)
+			func(_p: Vector2, _d: Vector2, _dmg: float) -> void: _hit_seen.append(true)
 		)
 
 	for i in frames:
@@ -174,7 +174,7 @@ func _disarm_bots(world) -> void:
 ##
 ## Teams now start at opposite ends of the arena, which is right for a match and
 ## useless for a screenshot: the nearest enemy is beyond both the camera and the
-## arrow's range, so the capture would show a shot sailing into empty grass. The
+## bullet's range, so the capture would show a shot sailing into empty grass. The
 ## arrangement is deliberate and stated rather than hidden — this is a test
 ## fixture, not gameplay.
 func _stage_target(world) -> void:
@@ -183,18 +183,18 @@ func _stage_target(world) -> void:
 		return
 
 	# A fixed offset is not good enough: +360 on the x axis drops the target
-	# inside the wall block beside the left spawn, so every arrow struck stone
+	# inside the wall block beside the left spawn, so every shot struck stone
 	# and the capture silently stopped showing a hit at all. Ask the arena
 	# instead — an open cell with a clear line of fire, whatever the map looks
 	# like. This survives the arena being re-authored, which it just was.
-	# Distances are derived from how far an arrow ACTUALLY flies, not written
-	# down. The previous list started at 300 px; the pacing pass cut the bow's
+	# Distances are derived from how far a bullet ACTUALLY flies, not written
+	# down. The previous list started at 300 px; the pacing pass cut the gun's
 	# reach to 195 and every staged shot then died in mid-air. The capture said
 	# TIMED OUT WITHOUT A HIT rather than writing a plausible screenshot, which
 	# is the gate working (ADR-0012) — but a fixture that has to be re-tuned by
 	# hand every time a number moves is a fixture that will be wrong again.
 	var from: Vector2 = world.player.position
-	var reach: float = _tuned("draw_max_speed", 780.0) * _tuned("arrow_lifetime", 0.25)
+	var reach: float = _tuned("bullet_speed", 1400.0) * _tuned("bullet_lifetime", 0.165)
 	for fraction in [0.65, 0.5, 0.8, 0.35]:
 		var distance: float = reach * fraction
 		for step in 16:
@@ -210,7 +210,7 @@ func _stage_target(world) -> void:
 			target.spawn_point = spot
 			print(
 				(
-					"screenshot: staged target at %s (%.0fpx away, %.0f%% of the bow's %.0fpx reach)"
+					"screenshot: staged target at %s (%.0fpx away, %.0f%% of the gun's %.0fpx reach)"
 					% [str(spot), distance, fraction * 100.0, reach]
 				)
 			)
@@ -231,17 +231,16 @@ func _drive_combat(main: Node, frame: int) -> void:
 
 	var to_target: Vector2 = (target.position - world.player.position).normalized()
 
-	# Point the cat at the target and hold a full draw, so the aim preview and
-	# the bow string are both visible in the capture.
+	# Point the cat at the target and keep a finger down, so the aim preview and
+	# the muzzle are both visible in the capture.
 	controls.aim_vector = to_target
-	controls.is_drawing = true
-	controls.draw_strength = 1.0
+	controls.is_aiming = true
 	world.player.facing = to_target
 
-	# Fire on a cadence rather than once: the capture then lands with arrows in
+	# Fire on a cadence rather than once: the capture then lands with bullets in
 	# flight AND recent impacts, instead of depending on exact frame timing.
 	if frame > 10 and frame % 22 == 0:
-		controls.shot_released.emit(to_target, 1.0, false)
+		controls.shot_fired.emit(to_target, false)
 
 
 func _save(out: String) -> void:

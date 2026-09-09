@@ -34,7 +34,7 @@ var speed := Tuning.get_value("move_speed")     # never a `const`
 ```
 
 Tap **DBG** (top-right) for a slider per parameter, grouped by
-Movement / Bow / Quiver / Aim assist / Feel / Camera / Art / Regen / Targets.
+Movement / Gun / Aim assist / Bots / Feel / Camera / Art / Regen / Match.
 
 **The workflow this creates:** tune on the phone in real time → **Copy JSON** →
 paste into chat → the values are committed as the new defaults. That collapses a

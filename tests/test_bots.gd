@@ -214,12 +214,12 @@ func test_the_reaction_delay_holds_the_first_shot_and_then_releases_it() -> void
 	_tune("bot_skill", 0.0)
 	_tune("bot_aim_error_deg", 0.0)
 	_tune("bot_reaction_time", 0.5)
-	_tune("draw_time_full", 0.1)
+	_tune("fire_interval", 0.1)
 
 	var ctrl := BotController.new(1)
 	var first_fire := -1
 	for i in 120:
-		bot.bow.quiver = bot.bow.capacity()
+		bot.gun.magazine = bot.gun.capacity()
 		var cmd := ctrl.think(bot, w, DT)
 		if cmd.fire:
 			first_fire = i
@@ -232,10 +232,11 @@ func test_the_reaction_delay_holds_the_first_shot_and_then_releases_it() -> void
 	_restore()
 
 
-func test_a_bot_draws_at_a_human_rate_rather_than_emptying_its_quiver() -> void:
-	# The cheat guard. SimWorld fires whenever cmd.fire is true, so a bot that
-	# simply held it down would loose an arrow EVERY TICK and put five in the
-	# air in 83 ms — something no thumb can do. Bots have to pull the string.
+func test_a_bot_cannot_fire_faster_than_the_gun_allows() -> void:
+	# The cheat guard, and it moved. A bot used to be paced by having to build a
+	# draw, exactly as a thumb did. With the charge gone the pacing lives in
+	# Gun.consume()'s cooldown instead — the SAME code that limits the player —
+	# so this asserts that a bot holding fire down still cannot beat the gun.
 	var w := _world()
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
@@ -246,18 +247,22 @@ func test_a_bot_draws_at_a_human_rate_rather_than_emptying_its_quiver() -> void:
 	_tune("bot_skill", 1.0)
 	_tune("bot_aim_error_deg", 0.0)
 	_tune("bot_reaction_time", 0.0)
-	_tune("draw_time_full", 0.28)
 
 	var ctrl := BotController.new(2)
 	var shots := 0
 	for _i in 60:
-		bot.bow.quiver = bot.bow.capacity()
+		# Ammunition is refilled every tick on purpose: this is testing the rate
+		# limit, not the magazine. Without the cooldown the bot would fire on
+		# all sixty ticks.
+		bot.gun.magazine = bot.gun.capacity()
 		if ctrl.think(bot, w, DT).fire:
 			shots += 1
+			bot.gun.consume()
+		bot.gun.tick(DT)
 
 	_runner.check(shots >= 1, _fail("it shoots at all"))
-	# One second at a 0.28 s draw is at most four shots, never sixty.
-	_runner.check(shots <= 5, _fail("it cannot outshoot a player holding the same bow"))
+	# One second at a 0.35 s interval is at most three shots, never sixty.
+	_runner.check(shots <= 4, _fail("it cannot outshoot a player holding the same gun"))
 	_restore()
 
 
@@ -287,12 +292,12 @@ func test_a_bot_will_not_fire_into_stone() -> void:
 	_tune("bot_skill", 1.0)
 	_tune("bot_aim_error_deg", 0.0)
 	_tune("bot_reaction_time", 0.0)
-	_tune("draw_time_full", 0.05)
+	_tune("fire_interval", 0.05)
 
 	var ctrl := BotController.new(3)
 	var shots := 0
 	for _i in 120:
-		bot.bow.quiver = bot.bow.capacity()
+		bot.gun.magazine = bot.gun.capacity()
 		if ctrl.think(bot, w, DT).fire:
 			shots += 1
 
@@ -317,7 +322,7 @@ func test_the_skill_slider_measurably_narrows_the_spread() -> void:
 
 	_tune("bot_aim_error_deg", 30.0)
 	_tune("bot_reaction_time", 0.0)
-	_tune("draw_time_full", 0.05)
+	_tune("fire_interval", 0.05)
 
 	var clumsy := _mean_aim_error(w, bot, foe, 0.0)
 	var sharp := _mean_aim_error(w, bot, foe, 1.0)
@@ -337,7 +342,7 @@ func _mean_aim_error(w: SimWorld, bot: Fighter, foe: Fighter, skill: float) -> f
 	var total := 0.0
 	var shots := 0
 	for _i in 1200:
-		bot.bow.quiver = bot.bow.capacity()
+		bot.gun.magazine = bot.gun.capacity()
 		var cmd := ctrl.think(bot, w, DT)
 		if cmd.fire:
 			total += absf(angle_difference(truth, cmd.aim.angle()))
@@ -558,8 +563,8 @@ func test_a_full_3v3_actually_produces_a_fight() -> void:
 	# asserts that a fight breaks out.
 	#
 	# Deterministic despite the world seeding its own RNG: bots carry seeded
-	# generators, and they always loose at full draw, where Bow.deviation_for()
-	# is zero. Verified by running it repeatedly and getting identical counts.
+	# generators and the gun has no random deviation left in it at all.
+	# Verified by running it repeatedly and getting identical counts.
 	var w := SimWorld.new()
 	var start := {}
 	for i in w.fighters.size():
@@ -571,8 +576,8 @@ func test_a_full_3v3_actually_produces_a_fight() -> void:
 	# match that had in fact killed two cats.
 	var shots := []
 	var hits := []
-	w.fired.connect(func(_p: Vector2, _d: Vector2, _s: float) -> void: shots.append(1))
-	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float, _f: bool) -> void: hits.append(1))
+	w.fired.connect(func(_p: Vector2, _d: Vector2) -> void: shots.append(1))
+	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float) -> void: hits.append(1))
 
 	# The match has to be started now: SimWorld does not tick fighters outside
 	# MatchState.Phase.LIVE. That this test failed the moment the phase gate
@@ -603,3 +608,63 @@ func test_a_full_3v3_actually_produces_a_fight() -> void:
 	_runner.check(moved >= 5, _fail("every bot leaves its spawn"))
 	_runner.check(shots.size() > 10, _fail("bots find each other and shoot"))
 	_runner.check(hits.size() > 0, _fail("and some of those arrows connect"))
+
+
+# ------------------------------------------------------------ the darting
+
+
+## Bots must stand still for part of the time they are fighting.
+##
+## "characters move around too fast" turned out to be the ENEMIES, not the
+## player: move_speed was already down to 150 px/s, but _do_engage() applied a
+## lateral term on every single tick it could see anybody and reversed it every
+## 1.2 s. Nothing ever stopped. Six of those read as frantic darting at any
+## speed, and no speed slider fixes it — a bot that never stands still cannot be
+## looked at, let alone aimed at.
+##
+## Measured as the fraction of engaged ticks with no movement command at all,
+## which is the thing the eye actually reports.
+func test_a_bot_stands_still_for_part_of_the_fight() -> void:
+	var w := _world()
+	var bot: Fighter = w.fighters[1]
+	var foe := _foe_of(w, bot)
+	_runner.check(
+		_place(w, bot, foe, _engage_distance(), false), _fail("the arena offers a clear pair")
+	)
+
+	_tune("bot_skill", 0.2)
+	var ctrl := BotController.new(4)
+	var still := 0
+	var ticks := 600
+	for _i in ticks:
+		bot.gun.magazine = bot.gun.capacity()
+		if ctrl.think(bot, w, DT).move == Vector2.ZERO:
+			still += 1
+
+	var fraction := float(still) / float(ticks)
+	_runner.check(
+		fraction >= 0.15,
+		_fail(
+			(
+				"a bot is stationary %.0f%% of the fight (was 0%% and read as darting)"
+				% (fraction * 100.0)
+			)
+		)
+	)
+	_restore()
+
+## A reversal-rate gate was written here and deleted, which is worth recording.
+##
+## It counted direction reversals per second, expecting the old 1.2 s flip time
+## to show up as roughly twice the rate of the shipped 2.2 s. Measured, it read
+## ZERO reversals at BOTH settings — so it could not go red, and a gate that
+## passes on the bug it was written for is worse than no gate.
+##
+## The cause is real and worth knowing: _do_engage()'s wall-avoidance flips
+## _strafe_sign whenever the strafe would walk into stone, and at the staged
+## position it fires immediately after every cycle wrap and flips the sign
+## straight back. The metric was therefore pinned by the arena geometry under the
+## test, not by bot_strafe_flip_time at all.
+##
+## The stillness gate above is the one that actually holds: restoring either the
+## always-on lateral term or the missing range deadband turns it red.

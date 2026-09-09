@@ -1,6 +1,6 @@
 class_name CatView
 extends Node2D
-## Draws one cat: shadow, tinted body, untinted face, and an orbiting bow.
+## Draws one cat: shadow, tinted body, untinted face, and an orbiting gun.
 ##
 ## The cat stays upright and faces the camera rather than rotating to face its
 ## aim. From directly overhead a cat is an oval with two ear triangles, which
@@ -17,15 +17,14 @@ const FLIP_HYSTERESIS := 0.18
 var tint: Color = Palette.CAT_PLAYER
 var radius: float = 30.0
 var aim: Vector2 = Vector2.RIGHT
-var draw_strength: float = 0.0
-var show_bow: bool = true
+var show_gun: bool = true
 var flash: float = 0.0
 
 var _body: Sprite2D
 var _face: Sprite2D
 var _facing_right := true
 
-## Squash-and-stretch impulse, decaying to rest. Loosing an arrow punches the
+## Squash-and-stretch impulse, decaying to rest. Firing a shot punches the
 ## cat; taking a hit flinches it. Static sprites read as cardboard, and this is
 ## the cheapest possible animation given there is no animator in this workflow.
 var _punch: float = 0.0
@@ -80,15 +79,15 @@ func _process(_delta: float) -> void:
 	queue_redraw()
 
 
-## Kick the squash-and-stretch. Called when this cat looses an arrow.
+## Kick the squash-and-stretch. Called when this cat fires.
 func punch(amount: float) -> void:
 	_punch = clampf(maxf(_punch, amount), 0.0, 0.9)
 
 
 func _draw() -> void:
 	_draw_shadow()
-	if show_bow:
-		_draw_bow()
+	if show_gun:
+		_draw_gun()
 
 
 ## Grounds the sprite. Without a shadow, top-down characters read as stickers
@@ -105,27 +104,56 @@ func _draw_shadow() -> void:
 	draw_colored_polygon(pts, col)
 
 
-## The bow carries the aim direction that the body no longer does — and it makes
-## "this is an archer" legible, which a coloured circle never did.
-func _draw_bow() -> void:
+## The gun carries the aim direction that the body no longer does.
+##
+## A bow lived here, drawn as an arc with a string that pulled back as the draw
+## built — the draw strength made a visibly moving object out of the aim. There
+## is no draw any more, so this is a fixed silhouette that only rotates: a barrel
+## along the aim, a body behind it, and a muzzle block at the end.
+##
+## Drawn from primitives rather than an SVG for the same reason the bow was:
+## there is no artist and no image editor in this workflow, and a shape built
+## from the aim vector is always pointing exactly where the shot will go.
+func _draw_gun() -> void:
 	if aim == Vector2.ZERO:
 		return
 
-	var size := Tuning.get_value("bow_size")
-	var centre := aim * (radius * 1.35) + Vector2(0, -radius * 0.5)
-	var angle := aim.angle()
-
-	# Arc opening away from the cat, so it reads as a bow being aimed outward.
-	draw_arc(centre, size, angle - 1.15, angle + 1.15, 16, Palette.ARROW.darkened(0.25), 4.0)
-
-	# String, pulled back as the draw builds.
-	var pull := lerpf(0.0, size * 0.62, draw_strength)
+	var size := Tuning.get_value("gun_size")
+	var centre := aim * (radius * 1.15) + Vector2(0, -radius * 0.5)
 	var tangent := Vector2(-aim.y, aim.x)
-	var top := centre + tangent * size * 0.88 - aim * size * 0.18
-	var bottom := centre - tangent * size * 0.88 - aim * size * 0.18
-	var nock := centre - aim * pull
-	draw_line(top, nock, Palette.ARROW_TIP, 1.8)
-	draw_line(bottom, nock, Palette.ARROW_TIP, 1.8)
 
-	if draw_strength > 0.05:
-		draw_line(nock, nock + aim * (size * 1.5), Palette.ARROW, 3.0)
+	var barrel_len := size * 1.45
+	var barrel_half := size * 0.19
+	var muzzle := centre + aim * barrel_len
+
+	# Barrel: a quad along the aim, so it stays a rectangle at every angle
+	# rather than a line whose thickness reads differently on the diagonals.
+	draw_colored_polygon(
+		PackedVector2Array(
+			[
+				centre + tangent * barrel_half,
+				muzzle + tangent * barrel_half,
+				muzzle - tangent * barrel_half,
+				centre - tangent * barrel_half,
+			]
+		),
+		Palette.ARROW.darkened(0.35)
+	)
+
+	# Body: shorter and deeper, sitting behind the barrel.
+	var back := centre - aim * (size * 0.42)
+	var body_half := size * 0.34
+	draw_colored_polygon(
+		PackedVector2Array(
+			[
+				back + tangent * body_half,
+				centre + tangent * body_half,
+				centre - tangent * body_half,
+				back - tangent * body_half,
+			]
+		),
+		Palette.ARROW.darkened(0.15)
+	)
+
+	# A bright muzzle tip, so which end the shot leaves from is never a question.
+	draw_circle(muzzle, size * 0.24, Palette.ARROW_TIP)

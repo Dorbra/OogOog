@@ -11,7 +11,7 @@ deliberately refused.
 
 ## 1. The pitch
 
-**A 3v3 top-down archer brawler for phones, played over local WiFi.** Brawl
+**A 3v3 top-down cat shooter for phones, played over local WiFi.** Brawl
 Stars' structure — short matches, twin-thumb controls, travelling projectiles,
 health that regenerates out of combat — with cats.
 
@@ -84,79 +84,66 @@ cannot be balanced ([ADR-0004](decisions/0004-runtime-tuning.md)).
 
 ---
 
-## 3. The bow is the whole control scheme
+## 3. The gun is the whole control scheme
 
-**Why archers, not guns.** This is the load-bearing theme decision and it earns
-its place three separate times:
+**Archers were tried first, and the theme was replaced rather than tuned.** The
+reasoning for a bow was good and it is worth keeping visible, because it was
+wrong in the hand rather than wrong on paper:
 
-1. **The gesture and the fiction are the same action.** Drag back, hold, release.
-   For a bow that is literal. For a rifle, drag-then-release is arbitrary and has
-   to be learned.
-2. **Draw strength collapses a whole stack of shooter mechanics into one
-   legible number.** Hold longer → faster arrow, more damage, less deviation.
-   That is recoil, spread and accuracy cones replaced by one thing the player can
-   *see* in the reticle.
-3. **It is the most forgiving art to produce.** An arrow is a line and a
-   triangle. It survives placeholder quality far better than guns and muzzle
-   flashes — which matters when there is no artist.
+1. The gesture and the fiction were the same action — drag back, hold, release.
+2. Draw strength collapsed recoil, spread and accuracy cones into one legible
+   number.
+3. An arrow is a line and a triangle, which is the most forgiving art there is.
 
-### The gesture
+What it actually produced was a **450 ms hold in front of every shot**, on a
+projectile slow enough that a target drifted 1.14 cat-widths during its flight:
 
-```
-Left thumb   floating joystick, appears where it lands
-Right thumb  drag = DIRECTION     hold = POWER     release = LOOSE
-```
+> *"the Arrow shooting is sluggish and cant be expected, lets change back to
+> GUNS! with a clear line-of-fire"*
 
-Direction and power are independent axes of one gesture, so both are expressed
-without a mode switch.
+So the draw curve is **deleted, not turned down**
+([ADR-0022](decisions/0022-guns-supersede-archers.md)).
 
-### Snap shot: auto-aim attached to the weak option
+### Tap to fire
 
-Release with almost no drag and almost no hold → an instant shot, auto-aimed at
-the nearest target within `autoaim_radius`. It costs **no damage** — see the
-audience section; `snap_damage_mult` remains a slider so the trade can be
-re-introduced by turning a dial rather than editing code.
-
-**The tap shot LEADS its target**, solving the intercept in `Aim.intercept()`.
-For most of this project's life it did not: it pointed at where the target stood,
-which at the shipped speeds could only hit something moving inside 90 px while
-`autoaim_radius` was 235. A tap that cannot hit a moving cat is not an accessible
-option, it is a decoy — see
-[ADR-0020](decisions/0020-aim-assist-must-predict.md).
-
-**This is the most important single design decision in the control scheme.**
-Auto-aim is *mandatory* on a phone — precise manual aim on a 6" screen does not
-work, and pretending otherwise is how touch shooters become unplayable. But
-auto-aiming everything removes all skill expression.
-
-Brawl Stars' own split resolves both, and it is the one used here: **tap aims
-for you, drag is yours.** A drawn shot gets a narrow magnetic nudge —
-`aim_assist_deg`, currently 4° — which is **bounded**, not a snap: it closes a
-near miss and never leads for you. Aiming is therefore never *required*, and
-aiming is always *worth it*.
+- **Press** on the right half starts a gesture and fires **nothing**.
+- **Release** fires one round immediately: in the drag direction if the drag
+  passed `snap_max_drag`, auto-aimed and **leading** if it did not.
+- Classified on **drag distance alone**. A hold threshold used to be half of it,
+  so a player lining up a careful shot had it silently reclassified as an
+  auto-aimed tap for taking too long.
+- The rate limit lives in `Gun.consume()`, so the player and the bots are gated
+  by the same code and a fast tapper has shots **refused rather than queued** —
+  queueing would turn quick fingers back into lag.
 
 ### Auto-repeat
 
-`auto_repeat` (default on): holding keeps firing each time the draw completes.
-The quiver and its refill become the rate limiter instead of the player's thumb.
-
-This exists because of a real playtest complaint — "less 1 shot 1 pull, slow
-pull". Without it every shot costs a full press-hold-release gesture, which reads
-as sluggish however fast the draw itself is. It is a **slider, not a rewrite**,
-so the other model stays available.
+`auto_repeat` (default **off**): holding the right thumb keeps firing at the
+gun's own rate. Tap-to-fire is what was asked for and is what ships; this stays
+as a slider for when thumbs get tired, and it adds no timing of its own — the
+cooldown in `Gun` remains the single source of fire rate.
 
 ---
 
 ## 4. Combat model
 
-### Damage: draw strength drives everything
+### Damage: every shot is the same shot
 
-| | Min draw | Full draw |
-|---|---|---|
-| Arrow speed | 480 px/s | 780 px/s |
-| Reach (speed × lifetime) | 139 px | 226 px |
-| Damage | 10 | 28 |
-| Max deviation | 8° | 0° |
+| | |
+|---|---|
+| Bullet speed | 1400 px/s |
+| Reach (speed × lifetime) | 231 px — inside the 248 px half-view |
+| Flight to maximum range | 165 ms |
+| Damage | 28 (7.1 hits to a kill) |
+| Deviation | none |
+| Fire interval | 0.35 s, magazine 5, reload 1.1 s |
+| Required lead | 6.1°, against a cat subtending 7.2° |
+
+That last row is the design in one line: **point at a cat and the bullet arrives
+where you pointed**, at every range. Nothing varies between one shot and the
+next, which is a real loss — draw strength was the only shooting depth there was.
+Class asymmetry in M3.4 is what replaces it, and until then the shooting is
+deliberately plain.
 
 Full draw takes `draw_time_full` = 0.45 s. A full-draw hit is nearly 3× a rushed
 one and flies dead straight, which is the entire argument for committing.
@@ -289,17 +276,35 @@ colour-coded scores. No per-player statistics, ever: publishing who died most,
 every round, to the youngest player is the opposite of *competitive but not
 punishing*.
 
-### Quiver: 5 arrows, one back every 1.1 s
+### Magazine: 5 rounds, one back every 1.1 s
 
 Lifted from Brawl Stars' ammo rhythm. It is not a resource to manage across a
 match — it is a **pacing device**. It gates spam and forces the "am I committed
 to this fight?" decision, which matters *more* once regen exists, because
 disengaging is always an option.
 
+### Bots: they stop moving, on purpose
+
+A bot used to apply a lateral strafe term on **every tick it could see anybody**,
+reversing every 1.2 s, so it never once stood still. Six of those read as frantic
+darting at any movement speed — and the report was about the enemies, not the
+player, whose speed was already inside its own gate.
+
+Strafing is now a duty cycle: **60 % moving, 40 % standing**, with a deadband so
+a bot that has reached its preferred range actually stops there rather than
+creeping across it forever
+([ADR-0023](decisions/0023-bots-must-stand-still.md)).
+
+Measured over 24 seeded matches, this did something that was not the goal:
+**shutouts fell from five to one**. A bot that pauses is readable to the other
+bots as well as to you, so fights resolve on position rather than on whoever
+happened to be circling the right way.
+
 ### Health: regenerate out of combat
 
-`regen_delay` 3 s, then `regen_rate_pct` 20 %/s → zero to full in about 8 s of
-not being shot.
+`regen_delay` 4.5 s, then `regen_rate_pct` 20 %/s → zero to full in about 10 s of
+not being shot. The delay is the lever that matters, not the rate: you cannot
+heal above maximum, so a slower rate only delays topping up.
 
 **Why regen instead of health pickups:** pickups make map control the dominant
 strategy and punish the losing player twice. Regen means a fight that goes badly
@@ -475,7 +480,7 @@ Things that are genuinely undecided, and what would settle them.
 
 - **Does regen produce stalemates?** Both players trade, disengage, heal to full,
   repeat, and the match never resolves. Counters are already in the design —
-  quiver limits, damage-charged abilities, a match timer — but this needs real
+  magazine limits, damage-charged abilities, a match timer — but this needs real
   bots to test. **Settled by:** playtesting after `feat/bots`; the regen delay
   and rate are the first dials to turn.
 - **Is `auto_repeat` on or off by default?** Currently on. **Settled by:** thumbs.

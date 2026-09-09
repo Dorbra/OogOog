@@ -95,29 +95,29 @@ func test_friendly_fire_is_rejected() -> void:
 	_runner.check(mate != null, _fail("the player has a teammate"))
 
 	var before := mate.health.current
-	var arrow: Arrow = w.arrows[0]
+	var bullet: Bullet = w.bullets[0]
 	var dir := (mate.position - w.player.position).normalized()
-	arrow.launch(w.player.position, dir, 4000.0, 50.0, 2.0, w.player.team)
+	bullet.launch(w.player.position, dir, 4000.0, 50.0, 2.0, w.player.team)
 
 	for _i in 30:
-		w._tick_arrows(1.0 / 60.0)
+		w._tick_bullets(1.0 / 60.0)
 
 	_runner.check_near(mate.health.current, before, _fail("a teammate takes no damage"))
 
 
-func test_an_enemy_arrow_does_damage() -> void:
+func test_an_enemy_bullet_does_damage() -> void:
 	# The mirror of the above: proves the friendly-fire test is not passing
 	# simply because nothing ever connects.
 	var w := _world()
 	var foe: Fighter = w.enemies_of(w.player.team)[0]
 	var before := foe.health.current
-	var arrow: Arrow = w.arrows[0]
-	arrow.launch(foe.position - Vector2(60, 0), Vector2.RIGHT, 4000.0, 25.0, 2.0, w.player.team)
+	var bullet: Bullet = w.bullets[0]
+	bullet.launch(foe.position - Vector2(60, 0), Vector2.RIGHT, 4000.0, 25.0, 2.0, w.player.team)
 
 	for _i in 30:
-		w._tick_arrows(1.0 / 60.0)
+		w._tick_bullets(1.0 / 60.0)
 
-	_runner.check(foe.health.current < before, _fail("an enemy arrow connects"))
+	_runner.check(foe.health.current < before, _fail("an enemy bullet connects"))
 
 
 func test_death_then_respawn_restores_full_health_at_the_spawn_point() -> void:
@@ -125,7 +125,7 @@ func test_death_then_respawn_restores_full_health_at_the_spawn_point() -> void:
 	var foe: Fighter = w.enemies_of(w.player.team)[0]
 	var spawn := foe.spawn_point
 
-	w.apply_damage(foe, 99999.0, Vector2.RIGHT, true)
+	w.apply_damage(foe, 99999.0, Vector2.RIGHT)
 	_runner.check(not foe.alive(), _fail("lethal damage kills"))
 
 	# Drift far away, so a respawn that failed to reposition would be obvious.
@@ -175,5 +175,5 @@ func test_the_player_can_be_killed() -> void:
 	# invincible. That is the headline behaviour change of this milestone.
 	var w := _world()
 	_runner.check(w.player.health.maximum > 0.0, _fail("the player has health"))
-	w.apply_damage(w.player, w.player.health.maximum, Vector2.RIGHT, true)
+	w.apply_damage(w.player, w.player.health.maximum, Vector2.RIGHT)
 	_runner.check(not w.player.alive(), _fail("the player can die"))
