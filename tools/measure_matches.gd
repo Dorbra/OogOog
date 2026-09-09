@@ -10,6 +10,19 @@ extends SceneTree
 ## So: any change that alters how often anyone meets anyone gets run through this
 ## before it ships, and the two distributions go in the PR side by side.
 ##
+## READ THIS BEFORE COMPARING TWO CONFIGURATIONS.
+##
+## "mean kills" is a PER-MATCH TOTAL, and a match ENDS when someone reaches
+## match_target_kills. So the total silently encodes how long the match lasted,
+## and a more lethal configuration reaches the cap sooner and records FEWER
+## kills. Swept naively, the metric runs backwards exactly where it matters.
+##
+## That is not hypothetical: it produced a clean-looking non-monotonic "peak"
+## and a plausible story about overkill waste, both of which were artifacts of
+## the cap (ADR-0025). Pass `match_target_kills=999` so every match runs the
+## full clock, or compare a rate rather than a count. Never compare per-match
+## totals across configurations that change how long a match lasts.
+##
 ## Run: godot --headless --path . --script tools/measure_matches.gd -- [runs]
 ##
 ## Optional `key=value` arguments override tuning for the batch, so a sweep is

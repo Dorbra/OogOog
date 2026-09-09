@@ -145,10 +145,16 @@ cooldown in `Gun` remains the single source of fire rate.
 | Bullet speed | 1400 px/s |
 | Reach (speed × lifetime) | 231 px — inside the 248 px half-view |
 | Flight to maximum range | 165 ms |
-| Damage | 28 (7.1 hits to a kill) |
+| Damage | 40 — **5 hits to a kill, 0.90 s of perfect fire** |
 | Deviation | none |
-| Fire interval | 0.35 s, magazine 5, reload 1.1 s |
+| Fire interval | 0.18 s → 5.6 shots/s in a burst |
+| Magazine / reload | 10 rounds (1.8 s of continuous fire), one back every 0.55 s |
 | Required lead | 6.1°, against a cat subtending 7.2° |
+
+Measured over 24 seeded matches: **42.5 kills, a cat lives 16.8 s, ~7 deaths
+each** — 3.2× the lethality of the first gun tuning, chosen deliberately after
+being shown that number ([ADR-0025](decisions/0025-a-rate-is-not-a-count.md)).
+`match_target_kills` is 35 so the clock still decides 23 matches in 24.
 
 That last row is the design in one line: **point at a cat and the bullet arrives
 where you pointed**, at every range. Nothing varies between one shot and the

@@ -5,6 +5,9 @@ extends Node2D
 ## Pulled out of main.gd. Reads simulation state but never writes it — anything
 ## here can be deleted and the game still plays identically, just blind.
 
+## The ammo row spans this many radii, whatever the magazine size.
+const MAGAZINE_ROW_SPAN := 3.2
+
 const TRAIL_SAMPLES := 8
 
 var _world: SimWorld
@@ -318,6 +321,23 @@ func _draw_aim_preview(alpha: float) -> void:
 	draw_arc(end, 18.0, 0.0, TAU, 20, Color(col.r, col.g, col.b, 0.8 * strength), 2.5)
 
 
+## How wide one ammo pip may be, so the row never outgrows the cat.
+##
+## The width used to be a flat 9 px per pip, which meant the ROW grew with the
+## magazine: at 5 rounds it was 57 px against a 58 px cat, and doubling the
+## magazine to 10 took it to 117 px — a bar twice as wide as the animal it
+## belongs to, reaching across the arena floor. Pips shrink now instead, so the
+## row stays put and only gets denser.
+##
+## Static and pure so the constraint can be asserted rather than eyeballed in a
+## capture — magazine_size is a slider that goes to 12.
+static func magazine_pip_width(capacity: int, radius: float, gap: float) -> float:
+	if capacity <= 0:
+		return 0.0
+	var room := radius * MAGAZINE_ROW_SPAN - float(capacity - 1) * gap
+	return clampf(room / float(capacity), 1.0, 9.0)
+
+
 ## Ammo under the hero, in WORLD space, where Brawl Stars puts it and where the
 ## eye already is mid-fight. It used to sit at the bottom of the screen, which
 ## meant looking away from the fight to count rounds.
@@ -330,9 +350,9 @@ func _draw_magazine_pips() -> void:
 	if capacity <= 0:
 		return
 
-	var pip_w := 9.0
 	var pip_h := 5.0
 	var gap := 3.0
+	var pip_w := magazine_pip_width(capacity, f.radius, gap)
 	var total := capacity * pip_w + (capacity - 1) * gap
 	var origin := f.position + Vector2(-total * 0.5, f.radius * 1.15)
 

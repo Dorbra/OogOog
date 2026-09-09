@@ -120,10 +120,33 @@ func test_cats_move_at_a_speed_you_can_read() -> void:
 	)
 
 
+## A kill must stay chunky enough to read, and slow enough to react to.
+##
+## This was a hit-count floor alone — "at least four hits" — and the fire rate
+## made that a proxy rather than a measure. When fire_interval fell 0.35 -> 0.18
+## the wall-clock time to kill went 2.50 s -> 0.90 s while the hit count barely
+## moved, so the gate went on passing while the thing it was written to protect
+## against got two and a half times worse. The same failure as the sight-range
+## bound in this file's own history: a number that happens to be nearby is not
+## the number that matters.
+##
+## So both halves are pinned now, and the second one is the real gate.
 func test_a_fighter_survives_more_than_a_moment() -> void:
-	# A design floor, not a law of physics: with three enemies able to focus one
-	# player, a time-to-kill under four hits is the "dead in a second" the first
-	# playtest reported. Deliberately loose — it pins the disaster case, not the
-	# balance, which is settled with thumbs.
 	var hits := Tuning.get_value("fighter_health") / maxf(Tuning.get_value("bullet_damage"), 0.01)
-	_runner.check(hits >= 4.0, _fail("a kill takes at least four hits, got %.1f" % hits))
+	var interval := Tuning.get_value("fire_interval")
+
+	# Three hits is the floor the user set: "3-5 good shots are enough for a
+	# kill". Below it a kill is one or two taps and there is nothing to read.
+	_runner.check(hits >= 3.0, _fail("a kill takes at least three hits, got %.1f" % hits))
+
+	# And the one that actually says "not dead in a second": how long a fighter
+	# survives someone shooting PERFECTLY. Deliberately well under the 0.90 s the
+	# chosen values measure — this pins the disaster, not the balance, and the
+	# balance is settled with thumbs. Doubling bullet_damage from here trips it.
+	_runner.check(
+		hits * interval >= 0.6,
+		(
+			_fail("perfect fire needs %.2fs to kill (%.1f hits x %.2fs), floor is 0.60s")
+			% [hits * interval, hits, interval]
+		)
+	)

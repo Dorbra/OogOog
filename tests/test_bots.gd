@@ -261,8 +261,18 @@ func test_a_bot_cannot_fire_faster_than_the_gun_allows() -> void:
 		bot.gun.tick(DT)
 
 	_runner.check(shots >= 1, _fail("it shoots at all"))
-	# One second at a 0.35 s interval is at most three shots, never sixty.
-	_runner.check(shots <= 4, _fail("it cannot outshoot a player holding the same gun"))
+
+	# DERIVED from fire_interval, not written down. This bound was hard-coded at
+	# 4 — correct for the 0.35 s interval it was written against, and wrong the
+	# moment the interval moved to 0.18. A cheat guard that has to be edited
+	# every time the gun changes is a cheat guard that will one day be edited
+	# to whatever the bot happens to be doing.
+	#
+	# +1 for the shot on tick zero, before any cooldown has been spent.
+	var allowed := int(1.0 / Tuning.get_value("fire_interval")) + 1
+	_runner.check(
+		shots <= allowed, _fail("fired %d times in a second; the gun allows %d") % [shots, allowed]
+	)
 	_restore()
 
 
