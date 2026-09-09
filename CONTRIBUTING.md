@@ -51,7 +51,23 @@ bash tests/test_docs_links.sh                         # no dead doc links
 ./tools/smoke_test.sh  "$GODOT" 300                   # does it boot?
 ./tools/render_test.sh "$GODOT" 90  build/shot.png   idle
 ./tools/render_test.sh "$GODOT" 240 build/combat.png combat
+./tools/verify_ui.sh   "$GODOT"                       # can the controls be TOUCHED?
 ```
+
+**If your change alters how often anyone meets anyone — movement, ranges, bot
+behaviour, healing, damage — also run the balance measurement and put the two
+distributions in the PR:**
+
+```bash
+"$GODOT" --headless --path . --script tools/measure_matches.gd -- 24
+```
+
+It plays whole matches and reports the score distribution, how the match was
+decided, time to the first kill, and how far an unled shot still hits. Three
+balance predictions in this project have been wrong, one by a factor of ten; the
+tool exists because arguing about these numbers does not work. It also accepts
+`key=value` overrides, so a sweep is a shell loop rather than a series of
+commits.
 
 **Then look at the screenshots.** They are the only way to see the game without
 a phone, and they have caught bugs no test did: an autoload that failed to

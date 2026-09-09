@@ -3,7 +3,7 @@
     "group": "Aim assist",
     "max": 25.0,
     "min": 0.0,
-    "value": 8.0
+    "value": 4.0
   },
   "aim_min_drag": {
     "group": "Controls",
@@ -27,7 +27,7 @@
     "group": "Bow",
     "max": 5.0,
     "min": 0.2,
-    "value": 0.29
+    "value": 0.44
   },
   "arrow_width": {
     "group": "Bow",
@@ -159,7 +159,7 @@
     "group": "Bow",
     "max": 3500.0,
     "min": 200.0,
-    "value": 780.0
+    "value": 520.0
   },
   "draw_min_damage": {
     "group": "Bow",
@@ -171,7 +171,7 @@
     "group": "Bow",
     "max": 2000.0,
     "min": 100.0,
-    "value": 480.0
+    "value": 320.0
   },
   "draw_time_full": {
     "group": "Bow",
@@ -219,7 +219,7 @@
     "group": "Feel",
     "max": 1200.0,
     "min": 0.0,
-    "value": 260.0
+    "value": 156.0
   },
   "match_countdown": {
     "group": "Match",
@@ -231,7 +231,7 @@
     "group": "Match",
     "max": 50.0,
     "min": 1.0,
-    "value": 6.0
+    "value": 10.0
   },
   "match_time_limit": {
     "group": "Match",
@@ -243,19 +243,19 @@
     "group": "Movement",
     "max": 9000.0,
     "min": 200.0,
-    "value": 1800.0
+    "value": 900.0
   },
   "move_friction": {
     "group": "Movement",
     "max": 9000.0,
     "min": 200.0,
-    "value": 1600.0
+    "value": 800.0
   },
   "move_speed": {
     "group": "Movement",
     "max": 900.0,
     "min": 50.0,
-    "value": 250.0
+    "value": 150.0
   },
   "number_size": {
     "group": "Feel",

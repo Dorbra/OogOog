@@ -117,14 +117,23 @@ the nearest target within `autoaim_radius`. It costs **no damage** — see the
 audience section; `snap_damage_mult` remains a slider so the trade can be
 re-introduced by turning a dial rather than editing code.
 
+**The tap shot LEADS its target**, solving the intercept in `Aim.intercept()`.
+For most of this project's life it did not: it pointed at where the target stood,
+which at the shipped speeds could only hit something moving inside 90 px while
+`autoaim_radius` was 235. A tap that cannot hit a moving cat is not an accessible
+option, it is a decoy — see
+[ADR-0020](decisions/0020-aim-assist-must-predict.md).
+
 **This is the most important single design decision in the control scheme.**
 Auto-aim is *mandatory* on a phone — precise manual aim on a 6" screen does not
 work, and pretending otherwise is how touch shooters become unplayable. But
 auto-aiming everything removes all skill expression.
 
-Attaching auto-aim to the fast, weak shot and withholding it from the slow,
-strong one resolves both: aiming is never *required*, but aiming is always
-*worth it*.
+Brawl Stars' own split resolves both, and it is the one used here: **tap aims
+for you, drag is yours.** A drawn shot gets a narrow magnetic nudge —
+`aim_assist_deg`, currently 4° — which is **bounded**, not a snap: it closes a
+near miss and never leads for you. Aiming is therefore never *required*, and
+aiming is always *worth it*.
 
 ### Auto-repeat
 
@@ -181,6 +190,44 @@ your own bow shakes nothing at all. This was a real defect, not a taste
 preference: the screen previously never stopped jittering and the whole game
 micro-froze about once a second for events happening off screen.
 
+### Movement: slow enough to read, slow enough to lead
+
+| | |
+|---|---|
+| Speed | 150 px/s — **2.6 of a cat's own length per second** (Brawl Stars ≈ 2.4) |
+| Crossing the visible height | 3.3 s (it was 2.0) |
+| To full speed | 0.17 s, with ~14 px of coast on release |
+
+**Measured in body-lengths per second, not pixels.** It is the one measure of
+"how fast does this look" that survives a change of zoom, and it is what made the
+complaint legible: the game shipped at **4.3** lengths per second and read as
+*"the characters are fast and the movement is too sharp, there's no chance to aim
+and hit like this"*.
+
+There is a little weight in the acceleration, but not much. Brawl Stars is itself
+snappy — what stops it feeling sharp is that it is slow *relative to the screen*,
+not a long acceleration curve, and on a touch screen a real glide reads as
+unresponsive rather than as momentum.
+
+### Aiming: leading is the skill, and the game only nudges
+
+| | |
+|---|---|
+| Arrow speed | 520 px/s at full draw, 0.44 s of life → **229 px** of reach |
+| Lead a player owes | ~16° at any range |
+| Unled shots still hit within | **65% of reach** — measured, not derived |
+
+Point straight at a close cat and you connect; at the range bots hold station you
+have to lead. That band is the answer to *"movement not too fast, but your aim
+skill does matter"*, and it is set by `arrow_lifetime` far more than by arrow
+speed — a longer flight is more drift to lead.
+
+It is **measured by firing an arrow**, never computed. The obvious arithmetic —
+compare the lead angle against the angle a cat subtends — said leading mattered
+past 75% of reach; fired for real, an unled shot hit at 100% of it, because the
+swept collision test scores the arrow's closest approach rather than where it
+lands. `tools/measure_matches.gd` prints the real number for the current build.
+
 ### Healing: why a fight resolves at all
 
 Out-of-combat regen is the reason this game is not punishing, and it was also the
@@ -214,19 +261,26 @@ bigger lever: at the original delay, changing it alone more than doubles kills.
 Pinned by `test_matches_actually_resolve`, with a floor well under the measured
 mean so ordinary tuning does not trip it and "matches stopped resolving" does.
 
-### The match: two minutes, first to six
+### The match: two minutes, first to ten
 
 | | |
 |---|---|
 | **Length** | 2 minutes. Short enough that a five-year-old stays in it start to finish, and that losing badly is over quickly |
-| **Win** | First team to `match_target_kills` (6), or whoever leads when the clock runs out |
+| **Win** | First team to `match_target_kills` (10), or whoever leads when the clock runs out |
 | **Level at the clock** | **Not a draw.** Play continues until one side leads by one |
 | **Between rounds** | Results screen, then a tap. No auto-restart |
 
-**Six is a measured number, not a chosen one.** Across 24 simulated matches the
-target decided 0 of them at 15 and 0 at 10 — it would have been dead code. At 6
-it fires on about an eighth, which is the blowout backstop it is meant to be.
-Recorded in [ADR-0017](decisions/0017-the-match-is-sim-state.md).
+**The kill target is a measured number, not a chosen one, and it has moved
+twice.** It was set to 6 because at the kill rate of the time a target of 10 or
+15 decided 0 of 24 simulated matches — dead code rather than a mercy rule. The
+movement and aiming fixes in
+[ADR-0020](decisions/0020-aim-assist-must-predict.md) roughly tripled the kill
+rate, at which point 6 decided 15 of 24 and the clock had stopped mattering. At
+**10** the clock decides 20 of 24 and the target fires only on a blowout, which
+is what it is for and what was asked for. Recorded in
+[ADR-0017](decisions/0017-the-match-is-sim-state.md); re-measure it with
+`tools/measure_matches.gd` after any change that alters how often anyone meets
+anyone.
 
 **Nothing on any of these screens is written down.** A five-year-old cannot read
 "3v3" or "BLUE WINS", so team size is a row of cats you tap, the countdown is a
@@ -411,7 +465,7 @@ Recorded so they can be declined again with a reason.
 | **A physics engine for collision** | [ADR-0008](decisions/0008-no-physics-engine.md) — headless testability is worth more than engine features here. |
 | **Making the pond gameplay-relevant** | It is decorative. Water that slows or damages is a real design decision deserving its own change, not something smuggled into a cover PR. |
 | **2D lights** | Expensive on mobile for a flat-shaded game that gains nothing from them. |
-| **Aim assist strong enough to aim for you** | `aim_assist_deg` is **8°** since M3.1c — enough to forgive a thumb, not enough to find a target you were not already pointing at. It defaulted to 0 while the audience was one adult who wanted to commit to a draw; [ADR-0013](decisions/0013-audience-is-a-family.md) changed that premise. It stays a slider. |
+| **Aim assist strong enough to aim for you** | `aim_assist_deg` is **4°** and, since [ADR-0020](decisions/0020-aim-assist-must-predict.md), it bounds how far the game may bend your shot rather than merely admitting it. A 4° gate that then snapped onto the intercept would be a lock-on: the lead a player owes is about 16°, so the game would be doing all of the aiming. It defaulted to 0 while the audience was one adult; [ADR-0013](decisions/0013-audience-is-a-family.md) changed that premise. It stays a slider. |
 
 ---
 

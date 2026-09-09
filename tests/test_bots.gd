@@ -478,6 +478,78 @@ func test_a_hurt_bot_retreats_and_breaks_the_line_of_sight() -> void:
 # ------------------------------------------------------------------ end to end
 
 
+## A bot with nobody to fight must keep looking, not stand where it is.
+##
+## The bug this pins hung a real match. `_do_seek` walked to the middle of the
+## map, which is a point a bot can ARRIVE at — and once there `_steer()` returns
+## a zero vector and it stops. After every fighter had died once and lost contact,
+## both teams did exactly that on opposite sides of an empty arena: a 3-3 match
+## ran for ten more minutes without a single shot. On a phone that is the results
+## screen never appearing.
+##
+## The bot is placed exactly ON the old fallback goal, because standing on your
+## goal is the only state in which the bug shows. A bot walking toward the centre
+## looks perfectly healthy right up until it gets there.
+func test_a_bot_with_nothing_to_fight_keeps_moving() -> void:
+	var w := _world()
+	var bot := w.fighters[1]
+	bot.controller = BotController.new(11)
+	# Nobody to see: every enemy is dead, so _acquire returns null and the bot is
+	# in SEEK with no last known position.
+	for f in w.fighters:
+		if f.team != bot.team:
+			f.health.take_damage(100000.0)
+
+	bot.position = w.arena.bounds().get_center()
+	bot.prev_position = bot.position
+	var start := bot.position
+
+	for _i in 180:
+		var cmd: InputCommand = bot.controller.think(bot, w, DT)
+		bot.tick(cmd, DT, w.arena)
+
+	_runner.check(
+		bot.position.distance_to(start) > 60.0,
+		(
+			_fail("a bot standing on the old fallback goal walks off it (moved %.0f px)")
+			% bot.position.distance_to(start)
+		)
+	)
+
+
+## And the same for the ghost: arriving where you last saw somebody, and finding
+## nobody, has to end the search rather than end the bot.
+func test_a_bot_forgets_a_last_known_position_it_has_reached() -> void:
+	var w := _world()
+	var bot := w.fighters[1]
+	bot.controller = BotController.new(13)
+	var enemy := w.nearest_enemy(bot.position, 100000.0, bot)
+
+	# Let it actually SEE the enemy, so _last_known is set the way the game sets
+	# it, rather than by poking at the controller's internals.
+	enemy.position = bot.position + Vector2(Tuning.get_value("bot_sight_range") * 0.4, 0.0)
+	enemy.prev_position = enemy.position
+	bot.controller.think(bot, w, DT)
+
+	# Then the enemy is gone and the bot is standing on the ghost.
+	enemy.health.take_damage(100000.0)
+	bot.position = enemy.position
+	bot.prev_position = bot.position
+	var start := bot.position
+
+	for _i in 180:
+		var cmd: InputCommand = bot.controller.think(bot, w, DT)
+		bot.tick(cmd, DT, w.arena)
+
+	_runner.check(
+		bot.position.distance_to(start) > 60.0,
+		(
+			_fail("a bot standing on a stale last-known position moves on (moved %.0f px)")
+			% bot.position.distance_to(start)
+		)
+	)
+
+
 func test_a_full_3v3_actually_produces_a_fight() -> void:
 	# Every other test in this file drives think() directly with fighters placed
 	# by hand. That verifies the parts and would happily stay green if bots were
@@ -508,13 +580,23 @@ func test_a_full_3v3_actually_produces_a_fight() -> void:
 	# would have sailed through unchanged.
 	w.match_state.phase = MatchState.Phase.LIVE
 
+	# The FURTHEST each fighter ever got from its spawn, not where it happened to
+	# be standing at the end. A bot that crosses the map, fights, and walks back
+	# reads as "never left" under the end-position check this used to do — which
+	# it duly did the first time the movement speed changed, reporting a bot that
+	# had travelled 541 px as having moved 53.
 	var idle := InputCommand.new()
+	var furthest := {}
+	for i in w.fighters.size():
+		furthest[i] = 0.0
 	for _i in 1800:
 		w.tick(idle, DT)
+		for i in w.fighters.size():
+			furthest[i] = maxf(furthest[i], w.fighters[i].position.distance_to(start[i]))
 
 	var moved := 0
 	for i in w.fighters.size():
-		if w.fighters[i].position.distance_to(start[i]) > 60.0:
+		if furthest[i] > 60.0:
 			moved += 1
 
 	# Five bots and one motionless player, so five is the whole roster moving.

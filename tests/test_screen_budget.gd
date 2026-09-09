@@ -97,6 +97,29 @@ func test_bots_cannot_see_you_from_off_screen() -> void:
 	)
 
 
+## Nothing may move faster than the eye can follow on a 6" screen.
+##
+## In body-lengths per second, which is the one measure of "how fast does this
+## look" that survives a change of zoom. Brawl Stars runs its brawlers at about
+## 2.4 of their own size per second. This shipped at 4.3 and the report was "the
+## characters are fast and the movement is too sharp, there's no chance to aim
+## and hit like this".
+##
+## Against the fighter's own diameter rather than the sprite's texture box. The
+## cat drawn inside cat_body.svg is 62 px tall and 36 px wide against a 58 px
+## hurtbox; the 128 px texture it sits in is mostly transparent margin. Measuring
+## that texture overstates the cat by 20% and makes this gate lenient by the same
+## amount — and believing the texture box was the cat is what briefly convinced
+## me the hurtbox needed widening, when it was already 1.6x the visible animal.
+func test_cats_move_at_a_speed_you_can_read() -> void:
+	var body := Tuning.get_value("fighter_radius") * 2.0
+	var lengths := Tuning.get_value("move_speed") / maxf(body, 0.01)
+	_runner.check(
+		lengths <= 3.0,
+		_fail("cats cross %.2f of their own length per second (Brawl Stars ~2.4)" % lengths)
+	)
+
+
 func test_a_fighter_survives_more_than_a_moment() -> void:
 	# A design floor, not a law of physics: with three enemies able to focus one
 	# player, a time-to-kill under four hits is the "dead in a second" the first
