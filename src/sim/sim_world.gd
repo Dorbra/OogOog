@@ -211,6 +211,17 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 		Tuning.get_value("bullet_lifetime"),
 		shooter.team
 	)
+	# You shot that way, so you are facing that way — and you STAY facing that
+	# way, because nothing else moves facing any more.
+	#
+	# This is what covers the tap. _emit_shot() sends Vector2.ZERO for a tap
+	# because the caller auto-aims it, so the firing tick would otherwise fall
+	# through to Fighter.tick()'s movement branch and the cat would snap to face
+	# where it was walking — the exact reset this change exists to remove, but
+	# only on the one shot a five-year-old actually uses.
+	shooter.facing = dir
+	shooter.mark_aimed()
+
 	# Shooting gives you away. Without this an ambusher in a bush is permanently
 	# invisible while killing people, which is not cover — it is a cheat.
 	shooter.reveal_timer = Tuning.get_value("reveal_time")

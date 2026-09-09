@@ -95,7 +95,19 @@ func _release_finger(index: int) -> void:
 		_emit_shot()
 		_aim_finger = UNASSIGNED
 		is_aiming = false
-		aim_vector = Vector2.ZERO
+		# aim_vector DELIBERATELY SURVIVES.
+		#
+		# It used to be zeroed here, and Fighter.tick() falls through to the
+		# MOVEMENT direction when the aim is zero — so the cat swung to face
+		# wherever it was walking the instant you released, and CatView draws the
+		# gun along facing, so the barrel visibly snapped away on every shot:
+		#
+		#     "the Player can keep a line-of-fire, and not 'reset' after every
+		#      shoot... Think about FPS games on Mobile"
+		#
+		# Keeping it makes the velocity fallback correct rather than dead: it now
+		# fires only before the player has ever aimed, which is the one moment
+		# there is no line to keep.
 
 
 func _handle_drag(event: InputEventScreenDrag) -> void:
@@ -112,11 +124,24 @@ func _handle_drag(event: InputEventScreenDrag) -> void:
 ## player lining up a shot got it silently reclassified as a tap the moment they
 ## took too long. Distance is the whole question now: did you point somewhere, or
 ## did you just tap?
+##
+## `snap_max_drag` is the ONLY threshold. There used to be a second one,
+## `aim_min_drag` at 40 px, below which the aim refused to update — while this
+## function called anything over 26 px an aimed shot. A drag landing in that
+## 26-40 px gap was fired as an aimed shot along an aim nothing had updated and
+## the preview had never drawn. One number makes that gap unrepresentable rather
+## than merely fixed.
+##
+## The shot goes along `aim_vector`, NOT along the raw drag. aim_vector is the
+## smoothed direction the preview actually drew; firing the raw drag meant a
+## quick flick left the bullet somewhere the dotted line had never pointed, which
+## is ADR-0019's lesson reintroduced by the PR that removed the charge. Preview
+## and shot are now the same value rather than two values that agree.
 func _emit_shot() -> void:
 	var drag := _aim_current - _aim_origin
 	var is_snap := drag.length() < Tuning.get_value("snap_max_drag")
 	# A tap carries no direction of its own — the caller auto-aims and leads it.
-	var dir := Vector2.ZERO if is_snap else drag.normalized()
+	var dir := Vector2.ZERO if is_snap else aim_vector
 	shot_fired.emit(dir, is_snap)
 
 
@@ -161,7 +186,10 @@ func _update_aim_direction(delta: float) -> void:
 	# Below the threshold the drag vector is mostly thumb noise: a 10px offset
 	# carries the same authority as a 200px one once normalised, which is what
 	# made small movements swing the shot wildly. Hold the last direction.
-	if offset.length() < Tuning.get_value("aim_min_drag"):
+	#
+	# The SAME threshold _emit_shot() classifies on, deliberately: any drag long
+	# enough to count as an aimed shot is long enough to have moved the aim.
+	if offset.length() < Tuning.get_value("snap_max_drag"):
 		return
 
 	var target := offset.normalized()
