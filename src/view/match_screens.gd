@@ -52,8 +52,24 @@ func _ready() -> void:
 ## Control's rect and every layout here is computed from `get_viewport_rect()`.
 ## So every render capture looked right while the screen was completely dead,
 ## which is the whole lesson of ADR-0019: appearance is not behaviour.
+##
+## The anchors are pinned TOP_LEFT rather than FULL_RECT, and that is the only
+## thing here that is about tidiness. FULL_RECT gives the node non-equal opposite
+## anchors, which is Godot's signal that the layout system owns its rect — so
+## assigning `size` a line later warned on every single boot, into the middle of
+## the smoke test's output, where a real error could hide behind it. All four
+## anchors equal means there is nothing claiming to override the rect, and the
+## assignment below is its only author. Measured before and after: the rect is
+## the same on every frame, resize included.
+##
+## `set_deferred("size", ...)`, which is what the warning itself suggests, was
+## tried and is wrong on both counts. It leaves the Control at (0, 0) for the
+## whole of `_ready()` — the shipped bug again, in a one-frame window that
+## `verify_ui.gd` would not catch, because it waits two frames before looking.
+## And it does not even silence the warning: the deferred set runs before the
+## deferred callback that clears the warning flag, so it still prints.
 func _fit_to_viewport() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
+	set_anchors_preset(Control.PRESET_TOP_LEFT)
 	position = Vector2.ZERO
 	size = get_viewport_rect().size
 
