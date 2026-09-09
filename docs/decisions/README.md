@@ -39,3 +39,4 @@ adapted: **Context → Decision → Consequences → Alternatives**.
 | [0017](0017-the-match-is-sim-state.md) | The match is simulation state; the freeze is a phase | Accepted |
 | [0018](0018-feedback-is-about-you.md) | Feedback is for what happens to *you* | Accepted |
 | [0019](0019-appearance-is-not-behaviour.md) | A capture proves it drew; only an input proves it works | Accepted |
+| [0020](0020-aim-assist-must-predict.md) | Aim assist must predict, or it is worse than nothing | Accepted |

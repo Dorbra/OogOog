@@ -174,18 +174,19 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 
 	var dir := cmd.aim
 	if cmd.snap:
-		# The snap shot is the fast, assisted option: it aims itself.
+		# The snap shot is the fast, fully assisted option: it aims itself, and
+		# it LEADS. A tap that points at where the target already is cannot hit
+		# anything that is moving, which is the whole reason a five-year-old taps
+		# in the first place.
 		var target := nearest_visible_enemy(
 			shooter.position, Tuning.get_value("autoaim_radius"), shooter
 		)
-		dir = (
-			(target.position - shooter.position).normalized() if target != null else shooter.facing
-		)
+		dir = _intercept(shooter, target) if target != null else shooter.facing
 	if dir == Vector2.ZERO:
 		dir = shooter.facing
 
 	if not cmd.snap:
-		dir = _apply_aim_assist(shooter, dir)
+		dir = assisted_aim(shooter, dir)
 
 	dir = shooter.bow.apply_deviation(dir, cmd.draw_strength, _rng)
 
@@ -210,11 +211,18 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 	fired.emit(origin, dir, cmd.draw_strength)
 
 
-## Optional magnetism on aimed shots. Defaults to zero: bending a shot the
-## player aimed themselves erodes the whole point of committing to a draw. It
-## exists as a slider so difficulty can be dialled in on the device rather than
-## argued about here.
-func _apply_aim_assist(shooter: Fighter, dir: Vector2) -> Vector2:
+## A narrow magnetic nudge on aimed shots, toward the INTERCEPT rather than
+## toward where the target currently stands.
+##
+## Public because the aim preview has to draw the shot that will actually be
+## fired. It read `player.facing` and applied no assist at all, so the dotted
+## line was already up to `aim_assist_deg` away from where the arrow went — and a
+## leading assist widens that gap rather than closing it. The preview must not
+## lie (ADR-0019), so it calls this.
+##
+## Narrow on purpose, and BOUNDED rather than snapping. Drag-to-aim is where the
+## player's skill lives: the assist closes a near miss, it does not lead for you.
+func assisted_aim(shooter: Fighter, dir: Vector2) -> Vector2:
 	var max_angle := deg_to_rad(Tuning.get_value("aim_assist_deg"))
 	if max_angle <= 0.0:
 		return dir
@@ -225,10 +233,37 @@ func _apply_aim_assist(shooter: Fighter, dir: Vector2) -> Vector2:
 	if target == null:
 		return dir
 
+	# Admission is judged against where the target IS, not where it is going:
+	# what the player is pointing at is a thing on screen, and gating on the
+	# intercept would refuse to help exactly when leading is hardest.
 	var to_target := (target.position - shooter.position).normalized()
-	if absf(dir.angle_to(to_target)) > max_angle:
+	if to_target == Vector2.ZERO or absf(dir.angle_to(to_target)) > max_angle:
 		return dir
-	return to_target
+
+	# Rotate TOWARD the intercept by at most the cone, rather than onto it. That
+	# difference is the whole design. The lead a player owes at these speeds is
+	# about 16 degrees, so a 4 degree gate granting an unbounded turn would be a
+	# lock-on: point at the cat and the game does all the leading, and the skill
+	# the aiming is meant to reward evaporates.
+	var want := dir.angle_to(_intercept(shooter, target))
+	return dir.rotated(clampf(want, -max_angle, max_angle))
+
+
+## Where `shooter` must point to hit `target`, at full draw.
+##
+## Full draw rather than the current draw strength: under `auto_repeat` every
+## player shot is a full draw, and a snap shot is loosed the instant the thumb
+## lifts with no draw to read. Using a partial speed here would lead by too much
+## on the one shot that is hardest to place.
+func _intercept(shooter: Fighter, target: Fighter) -> Vector2:
+	return Aim.intercept(
+		shooter.position,
+		shooter.bow.speed_for(1.0),
+		target.position,
+		target.velocity,
+		1.0,
+		shooter.facing
+	)
 
 
 func _free_arrow() -> Arrow:

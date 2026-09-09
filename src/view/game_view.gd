@@ -248,6 +248,15 @@ func _draw_aim_preview(alpha: float) -> void:
 	if dir == Vector2.ZERO:
 		return
 
+	# The same nudge the shot itself will get. Without this the line is up to
+	# aim_assist_deg away from where the arrow goes — and now that the assist
+	# LEADS a moving target, the gap it hides is exactly the interesting part:
+	# the preview would point at the cat while the arrow flew in front of it.
+	#
+	# A preview that shows something other than the shot is the M3.1c bug and
+	# ADR-0019 in one: what is drawn has to be what happens.
+	dir = _world.assisted_aim(_world.player, dir)
+
 	var strength := _controls.draw_strength
 	# The real thing: speed x lifetime, uncapped. This used to be clamped to
 	# 620px directly under a comment claiming the preview could not lie, while

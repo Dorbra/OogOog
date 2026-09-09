@@ -74,10 +74,16 @@ var _aim_jitter: float = 0.0
 var _last_known := Vector2.ZERO
 var _has_last_known := false
 
+## Which enemy spawn this bot is walking toward while it has nobody to chase.
+var _patrol_index: int = 0
+
 
 func _init(rng_seed: int = 0) -> void:
 	_rng.seed = rng_seed
 	_strafe_sign = 1.0 if (rng_seed & 1) == 0 else -1.0
+	# Fanned out by seed rather than all starting at zero, or a team's three bots
+	# would patrol in single file and search one third of the map between them.
+	_patrol_index = absi(rng_seed)
 
 
 ## Called once per simulation tick by SimWorld._command_for().
@@ -168,7 +174,13 @@ func _can_ambush(me: Fighter, world: SimWorld) -> bool:
 
 
 func _do_seek(me: Fighter, world: SimWorld) -> void:
-	var anchor := _last_known if _has_last_known else world.arena.bounds().size * 0.5
+	# Arrived at the ghost and found nobody there: forget it. Without this a bot
+	# stands on the patch of grass where it last saw somebody for the rest of the
+	# match, because _steer() returns a zero vector once you are on your goal.
+	if _has_last_known and me.position.distance_to(_last_known) <= world.arena.cell_size:
+		_has_last_known = false
+
+	var anchor := _last_known if _has_last_known else _patrol(me, world)
 	var goal := anchor
 	if _skill() > Tuning.get_value("bot_cover_skill_gate"):
 		var bush := _nearest_bush(world.arena, me.position, anchor)
@@ -315,24 +327,21 @@ func _aim_and_fire(me: Fighter, world: SimWorld, target: Fighter, delta: float) 
 
 ## Where to point so a travelling arrow and a moving target arrive together.
 ##
-## Two passes: the first estimate uses the target's current distance, which is
-## wrong as soon as it is moving, and feeding that time back in once converges
-## closely enough for a 60 Hz simulation. A closed-form solve is possible and
-## not worth the reading cost for a difference nobody could see.
+## The prediction itself lives in Aim.intercept(), shared with the player's
+## auto-aim. It used to live here and ONLY here, which is how the player's assist
+## came to aim at where a target already was — see the header of src/sim/aim.gd.
+##
+## How much of the prediction a bot actually applies is the difficulty knob: at
+## bot_skill 0 the lead is zero and the bot shoots where you are.
 func _lead(me: Fighter, target: Fighter) -> Vector2:
-	var speed := maxf(me.bow.speed_for(1.0), 1.0)
-	var lead := Tuning.get_value("bot_lead_factor") * _skill()
-	var predicted := target.position
-	var flight := me.position.distance_to(target.position) / speed
-
-	for _pass in 2:
-		predicted = target.position + target.velocity * flight * lead
-		flight = me.position.distance_to(predicted) / speed
-
-	var dir := predicted - me.position
-	if dir.length_squared() < 0.0001:
-		return me.facing
-	return dir.normalized()
+	return Aim.intercept(
+		me.position,
+		me.bow.speed_for(1.0),
+		target.position,
+		target.velocity,
+		Tuning.get_value("bot_lead_factor") * _skill(),
+		me.facing
+	)
 
 
 # ------------------------------------------------------------------ movement
@@ -367,6 +376,51 @@ func _steer(me: Fighter, world: SimWorld, goal: Vector2) -> Vector2:
 	if delta.length_squared() < 0.0001:
 		return Vector2.ZERO
 	return delta.normalized()
+
+
+## Somewhere to look when there is nobody to chase — and, more importantly,
+## somewhere that is never a place to STOP.
+##
+## This used to be the middle of the map, which is a point a bot can arrive at.
+## Once there `_steer()` returns a zero vector and it stands still. After every
+## fighter had died once and lost contact, both teams did exactly that on
+## opposite sides of an empty arena: a 3-3 match ran for ten more minutes without
+## a single shot fired. On a phone that is the results screen never appearing,
+## which is indistinguishable from the game hanging.
+##
+## So a bot with nothing to do patrols the ENEMY's spawn cells in rotation and
+## advances the moment it reaches one. Enemies keep coming back to those, and
+## both teams end up crossing the arena in opposite directions, so contact
+## re-establishes itself instead of depending on luck.
+##
+## Spawn cells are map knowledge, not sight — the same thing any player learns in
+## one round. The bot is not being told where anybody currently is, and nothing
+## here touches how it aims.
+func _patrol(me: Fighter, world: SimWorld) -> Vector2:
+	var spawns := _enemy_spawns(me, world)
+	if spawns.is_empty():
+		return world.arena.bounds().get_center()
+
+	var goal: Vector2 = spawns[_patrol_index % spawns.size()]
+	if me.position.distance_to(goal) <= world.arena.cell_size:
+		_patrol_index += 1
+		goal = spawns[_patrol_index % spawns.size()]
+	return goal
+
+
+## The other side's spawn cells, deduplicated and in a stable order.
+##
+## Deduplicated because a team fields more fighters than the arena has spawns for
+## when `bot_team_size` exceeds the cluster, and `_build_teams()` wraps — three
+## copies of one point would make the rotation stand still, which is the exact
+## failure this is here to prevent.
+func _enemy_spawns(me: Fighter, world: SimWorld) -> Array[Vector2]:
+	var out: Array[Vector2] = []
+	for f in world.fighters:
+		if f.team == me.team or out.has(f.spawn_point):
+			continue
+		out.append(f.spawn_point)
+	return out
 
 
 # ------------------------------------------------------------- grid searches
