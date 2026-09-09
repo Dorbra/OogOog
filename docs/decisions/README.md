@@ -40,3 +40,4 @@ adapted: **Context → Decision → Consequences → Alternatives**.
 | [0018](0018-feedback-is-about-you.md) | Feedback is for what happens to *you* | Accepted |
 | [0019](0019-appearance-is-not-behaviour.md) | A capture proves it drew; only an input proves it works | Accepted |
 | [0020](0020-aim-assist-must-predict.md) | Aim assist must predict, or it is worse than nothing | Accepted |
+| [0021](0021-a-tuning-override-must-be-visible.md) | A saved tuning value must never override the build invisibly | Accepted |
