@@ -37,8 +37,23 @@ permissions:
   pull-requests: write
 
 # Per-ref, so a new push supersedes an in-flight run for the same branch.
+#
+# With one exception, and it cost a real validation run. Editing a pull
+# request's DESCRIPTION fires `pull_request.edited`. The job below filters that
+# down to base changes, so the jobs skip — but the run is still created, and it
+# landed in this group and cancelled the build that was at that moment
+# validating the head commit. What was left on that sha was a `build` check
+# reading `skipped`, which GitHub counts as a satisfied required check. So a
+# typo fix in a description destroyed the only evidence the code worked and
+# replaced it with something that looks like a pass. That is precisely the
+# failure this project's CI exists to prevent, and it happened on #19.
+#
+# A run that is going to skip therefore gets a group of its own, keyed by its
+# own run id, where it can cancel nothing. Real events — pushes, `synchronize`,
+# and a genuine retarget, which is an `edited` carrying `changes.base` — keep
+# sharing the per-ref group and still supersede each other.
 concurrency:
-  group: build-${{ github.workflow }}-${{ github.ref }}
+  group: build-${{ github.workflow }}-${{ github.ref }}-${{ github.event.action == 'edited' && github.event.changes.base == null && github.run_id || 'shared' }}
   cancel-in-progress: true
 
 env:
