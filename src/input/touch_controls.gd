@@ -10,17 +10,30 @@ extends Node
 ## thumb crosses the screen midpoint mid-drag.
 ##
 ## Left half  -> floating joystick (movement).
-## Right half -> aim by drag, draw by hold, loose on release.
+## Right half -> aim by drag, FIRE ON RELEASE. No charge.
+##
+## Hold time used to be a power axis: 450 ms of thumb before any shot left the
+## bow. That read as lag, not commitment —
+##
+##     "the Arrow shooting is sluggish and cant be expected"
+##
+## — so releasing fires immediately and every shot is identical. The rate limit
+## lives in Gun, not here, so the player and the bots are gated by one piece of
+## code and a fast tapper simply has shots refused rather than queued. Queueing
+## would turn quick fingers back into lag, which is the thing being removed.
 
-## Emitted on release. `snap` marks the fast, weak, auto-aimed shot.
-signal shot_released(aim: Vector2, draw_strength: float, snap: bool)
+## Emitted the instant a shot is fired. `snap` marks a tap: auto-aimed and
+## leading, with no damage penalty.
+signal shot_fired(aim: Vector2, snap: bool)
 
 const UNASSIGNED := -1
 
 var move_vector: Vector2 = Vector2.ZERO
 var aim_vector: Vector2 = Vector2.ZERO
-var draw_strength: float = 0.0
-var is_drawing: bool = false
+
+## True while a right-hand finger is down. The aim preview reads this — it is
+## the "clear line of fire" the shot will actually take.
+var is_aiming: bool = false
 
 # Finger index -> origin, for each side. -1 means "no finger on this side".
 var _move_finger: int = UNASSIGNED
@@ -30,7 +43,6 @@ var _move_current: Vector2 = Vector2.ZERO
 var _aim_finger: int = UNASSIGNED
 var _aim_origin: Vector2 = Vector2.ZERO
 var _aim_current: Vector2 = Vector2.ZERO
-var _aim_hold_time: float = 0.0
 
 var _screen_width: float = 1280.0
 
@@ -72,8 +84,7 @@ func _assign_finger(index: int, position: Vector2) -> void:
 		_aim_finger = index
 		_aim_origin = position
 		_aim_current = position
-		_aim_hold_time = 0.0
-		is_drawing = true
+		is_aiming = true
 
 
 func _release_finger(index: int) -> void:
@@ -83,9 +94,20 @@ func _release_finger(index: int) -> void:
 	elif index == _aim_finger:
 		_emit_shot()
 		_aim_finger = UNASSIGNED
-		is_drawing = false
-		draw_strength = 0.0
-		aim_vector = Vector2.ZERO
+		is_aiming = false
+		# aim_vector DELIBERATELY SURVIVES.
+		#
+		# It used to be zeroed here, and Fighter.tick() falls through to the
+		# MOVEMENT direction when the aim is zero — so the cat swung to face
+		# wherever it was walking the instant you released, and CatView draws the
+		# gun along facing, so the barrel visibly snapped away on every shot:
+		#
+		#     "the Player can keep a line-of-fire, and not 'reset' after every
+		#      shoot... Think about FPS games on Mobile"
+		#
+		# Keeping it makes the velocity fallback correct rather than dead: it now
+		# fires only before the player has ever aimed, which is the one moment
+		# there is no line to keep.
 
 
 func _handle_drag(event: InputEventScreenDrag) -> void:
@@ -96,15 +118,31 @@ func _handle_drag(event: InputEventScreenDrag) -> void:
 		_aim_current = event.position
 
 
+## Classified on DRAG ALONE, not on how long the thumb rested.
+##
+## A hold threshold used to be half of this decision, which meant a careful
+## player lining up a shot got it silently reclassified as a tap the moment they
+## took too long. Distance is the whole question now: did you point somewhere, or
+## did you just tap?
+##
+## `snap_max_drag` is the ONLY threshold. There used to be a second one,
+## `aim_min_drag` at 40 px, below which the aim refused to update — while this
+## function called anything over 26 px an aimed shot. A drag landing in that
+## 26-40 px gap was fired as an aimed shot along an aim nothing had updated and
+## the preview had never drawn. One number makes that gap unrepresentable rather
+## than merely fixed.
+##
+## The shot goes along `aim_vector`, NOT along the raw drag. aim_vector is the
+## smoothed direction the preview actually drew; firing the raw drag meant a
+## quick flick left the bullet somewhere the dotted line had never pointed, which
+## is ADR-0019's lesson reintroduced by the PR that removed the charge. Preview
+## and shot are now the same value rather than two values that agree.
 func _emit_shot() -> void:
 	var drag := _aim_current - _aim_origin
-	var is_snap := (
-		drag.length() < Tuning.get_value("snap_max_drag")
-		and _aim_hold_time < Tuning.get_value("snap_max_hold")
-	)
-	# A snap shot carries no direction of its own — the caller auto-aims it.
-	var dir := Vector2.ZERO if is_snap else drag.normalized()
-	shot_released.emit(dir, draw_strength, is_snap)
+	var is_snap := drag.length() < Tuning.get_value("snap_max_drag")
+	# A tap carries no direction of its own — the caller auto-aims and leads it.
+	var dir := Vector2.ZERO if is_snap else aim_vector
+	shot_fired.emit(dir, is_snap)
 
 
 func _process(delta: float) -> void:
@@ -133,21 +171,13 @@ func _update_aim(delta: float) -> void:
 	if _aim_finger == UNASSIGNED:
 		return
 
-	_aim_hold_time += delta
-
-	var full := Tuning.get_value("draw_time_full")
-	draw_strength = clampf(_aim_hold_time / full, 0.0, 1.0) if full > 0.0 else 1.0
-
 	_update_aim_direction(delta)
 
-	# Auto-repeat: holding keeps firing once each draw completes, so the quiver
-	# and its refill rate-limit the player instead of their thumb. Without it,
-	# every shot costs a full press-hold-release gesture, which reads as
-	# sluggish however fast the draw itself is.
-	if Tuning.get_value("auto_repeat") >= 0.5 and draw_strength >= 1.0:
-		shot_released.emit(aim_vector, 1.0, false)
-		_aim_hold_time = 0.0
-		draw_strength = 0.0
+	# Optional and OFF by default: the user asked for tap-to-fire. When it is on,
+	# emitting every frame is deliberate — Gun's cooldown is the single source of
+	# fire rate, so duplicating that timing here could only ever disagree with it.
+	if Tuning.get_value("auto_repeat") >= 0.5 and aim_vector != Vector2.ZERO:
+		shot_fired.emit(aim_vector, false)
 
 
 func _update_aim_direction(delta: float) -> void:
@@ -156,7 +186,10 @@ func _update_aim_direction(delta: float) -> void:
 	# Below the threshold the drag vector is mostly thumb noise: a 10px offset
 	# carries the same authority as a 200px one once normalised, which is what
 	# made small movements swing the shot wildly. Hold the last direction.
-	if offset.length() < Tuning.get_value("aim_min_drag"):
+	#
+	# The SAME threshold _emit_shot() classifies on, deliberately: any drag long
+	# enough to count as an aimed shot is long enough to have moved the aim.
+	if offset.length() < Tuning.get_value("snap_max_drag"):
 		return
 
 	var target := offset.normalized()

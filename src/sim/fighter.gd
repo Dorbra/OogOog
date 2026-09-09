@@ -32,7 +32,7 @@ var prev_position: Vector2 = Vector2.ZERO
 var spawn_point: Vector2 = Vector2.ZERO
 
 var health := Health.new()
-var bow := Bow.new()
+var gun := Gun.new()
 
 ## Produces this fighter's InputCommand each tick. Null means nobody is driving,
 ## and the fighter stands still — which is both the practice-dummy behaviour and
@@ -42,10 +42,26 @@ var controller: Variant = null
 var respawn_timer: float = 0.0
 
 ## Counts down after firing. While it is above zero this fighter is visible even
-## from inside a bush: loosing an arrow gives your position away, which is what
-## stops an ambusher from sitting in cover killing people with impunity.
+## from inside a bush: firing gives your position away, which is what stops an
+## ambusher from sitting in cover killing people with impunity.
 ## SimWorld.can_see() is the only reader.
 var reveal_timer: float = 0.0
+
+## Has this fighter ever been given an aim direction?
+##
+## Until it has, facing follows travel, which is what stops six cats moonwalking
+## out of their spawns at the start of a round. After it has, facing is OWNED by
+## the aim and movement never touches it again — see tick().
+var _has_aimed: bool = false
+
+
+## Called when something other than an InputCommand sets facing — firing a tap,
+## whose command carries no direction of its own because the world auto-aims it.
+## Without this a tap would leave `_has_aimed` false and the very next tick would
+## hand facing back to the movement direction, which is the reset surviving on
+## the one shot a five-year-old actually uses.
+func mark_aimed() -> void:
+	_has_aimed = true
 
 
 func alive() -> bool:
@@ -65,13 +81,28 @@ func tick(cmd: InputCommand, delta: float, arena: Arena) -> void:
 		_tick_dead(delta)
 		return
 
-	bow.tick(delta)
+	gun.tick(delta)
 	_apply_movement(cmd.move, delta)
 	_integrate(delta, arena)
 
+	# Facing is owned by the aim, permanently, from the first time one arrives.
+	#
+	# The `elif` used to run whenever the aim was zero, which meant releasing the
+	# thumb handed facing back to the movement direction and the cat swung to
+	# point wherever it was walking — the gun barrel with it, since CatView draws
+	# along facing. Every shot threw the line of fire away:
+	#
+	#     "the Player can keep a line-of-fire, and not 'reset' after every shoot"
+	#
+	# This lives HERE rather than in TouchControls, where the first version of
+	# the fix put it. Making the input layer promise never to send a zero aim
+	# leaves the reset latent in the simulation for every other producer — the
+	# network being the next one — and makes the rule untestable without a
+	# thumb. It is a fact about a fighter, so it belongs in the fighter.
 	if cmd.aim != Vector2.ZERO:
 		facing = cmd.aim
-	elif velocity.length_squared() > 1.0:
+		_has_aimed = true
+	elif not _has_aimed and velocity.length_squared() > 1.0:
 		facing = velocity.normalized()
 
 
@@ -92,7 +123,7 @@ func respawn() -> void:
 	position = spawn_point
 	prev_position = spawn_point
 	reveal_timer = 0.0
-	bow = Bow.new()
+	gun = Gun.new()
 
 
 func take_damage(amount: float) -> float:

@@ -47,7 +47,7 @@ func _world() -> SimWorld:
 func _stage(w: SimWorld, distance: float) -> Fighter:
 	var target := w.nearest_enemy(w.player.position, 100000.0, w.player)
 	var from := w.player.position
-	var drift := Tuning.get_value("move_speed") * Tuning.get_value("arrow_lifetime")
+	var drift := Tuning.get_value("move_speed") * Tuning.get_value("bullet_lifetime")
 
 	for step in 32:
 		var angle := TAU * float(step) / 32.0
@@ -81,32 +81,32 @@ func _stage(w: SimWorld, distance: float) -> Fighter:
 ## stationary one that any aim direction passes.
 func _fire_and_run(w: SimWorld, shooter: Fighter, target: Fighter, dir: Vector2) -> bool:
 	var hit := [false]
-	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float, _f: bool) -> void: hit[0] = true)
+	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float) -> void: hit[0] = true)
 
-	var arrow := w._free_arrow()
-	arrow.launch(
+	var bullet := w._free_bullet()
+	bullet.launch(
 		shooter.position + dir * shooter.radius,
 		dir,
-		shooter.bow.speed_for(1.0),
-		shooter.bow.damage_for(1.0, false),
-		Tuning.get_value("arrow_lifetime"),
+		shooter.gun.speed(),
+		shooter.gun.damage(),
+		Tuning.get_value("bullet_lifetime"),
 		shooter.team
 	)
 
 	var run := target.velocity
-	var ticks := int(Tuning.get_value("arrow_lifetime") * 60.0) + 4
+	var ticks := int(Tuning.get_value("bullet_lifetime") * 60.0) + 4
 	for _i in ticks:
 		target.velocity = run
 		target.prev_position = target.position
 		target.position += run * (1.0 / 60.0)
-		w._tick_arrows(1.0 / 60.0)
+		w._tick_bullets(1.0 / 60.0)
 		if hit[0]:
 			return true
 	return hit[0]
 
 
 func _reach() -> float:
-	return Tuning.get_value("draw_max_speed") * Tuning.get_value("arrow_lifetime")
+	return Tuning.get_value("bullet_speed") * Tuning.get_value("bullet_lifetime")
 
 
 # ------------------------------------------------------------------ the bug
@@ -119,40 +119,52 @@ func _straight_shot_hits(distance: float) -> bool:
 	return _fire_and_run(w, w.player, target, (target.position - w.player.position).normalized())
 
 
-func test_pointing_at_a_close_cat_is_enough() -> void:
-	# The five-year-old's shot. Inside about two thirds of the bow's range you
-	# can simply point at a moving cat and connect — leading is a skill the game
-	# rewards, not a tax it charges to play at all.
-	_runner.check(
-		_straight_shot_hits(_reach() * 0.4), _fail("an unled shot at close range still hits")
-	)
-
-
-func test_you_must_lead_at_fighting_range() -> void:
-	# And the other half of the same sentence: at the distance bots actually hold
-	# station, pointing at the cat is not enough.
-	#
-	# This is measured by firing a real arrow rather than compared against an
-	# angle, because the angle version of this assertion was WRONG. It said
-	# leading became necessary past 75% of the range; fired through the real tick
-	# loop, an unled shot connected at every range in the book — the swept
-	# collision test measures the arrow's closest approach, not where it lands.
-	# A gate that measures a proxy is the exact failure ADR-0016 was written for.
-	var range := Tuning.get_value("bot_preferred_range")
-	_runner.check(
-		not _straight_shot_hits(range),
-		_fail("an unled shot at the %.0f px fighting range misses" % range)
-	)
+## A CLEAR LINE OF FIRE, as an assertion.
+##
+## This replaces a gate that asserted the opposite, and the reversal is the
+## point rather than an accident.
+##
+## The old pair said: an unled shot must hit up close and must MISS at the range
+## bots hold station — "aim skill has to matter", encoded as a test. It was
+## honest about the arithmetic and wrong about the design, and the person playing
+## the game said so:
+##
+##     "the Arrow shooting is sluggish and cant be expected,
+##      lets change back to GUNS! with a clear line-of-fire"
+##
+## A gun at 1400 px/s crosses its whole range in 165 ms. Point at a cat and the
+## bullet arrives where you pointed — at every range, which is exactly what was
+## asked for. Keeping the old floor would have meant slowing the bullet back down
+## to protect a belief the user had already overruled.
+##
+## What is still worth pinning is that pointing WORKS. Measured by firing a real
+## bullet through the real tick loop, never by comparing angles: the angle
+## version of this assertion was wrong once already, because the swept collision
+## test scores closest approach rather than where the shot lands.
+func test_pointing_at_a_cat_is_enough_at_every_range() -> void:
+	# Typed explicitly: an untyped Array literal yields Variant elements, and
+	# `:=` cannot infer a type from one.
+	var fractions: Array[float] = [0.4, 0.7, 0.95]
+	for fraction in fractions:
+		var distance := _reach() * fraction
+		_runner.check(
+			_straight_shot_hits(distance),
+			(
+				_fail("an unled shot at %.0f px (%.0f%% of reach) connects")
+				% [distance, fraction * 100.0]
+			)
+		)
 
 
 func test_and_leading_it_properly_connects() -> void:
-	# The mirror, and it is not optional: without it the test above passes on a
-	# game where nothing can hit anything. That is the failure mode two of my own
-	# gates shipped with in fix/steady.
+	# The mirror, and it is not optional: without it the test above could pass on
+	# a game where the shot simply teleports. It also keeps Aim.intercept honest
+	# now that pointing straight works — a leading solver that returned nonsense
+	# would no longer be caught by anything else in this file.
 	var w := _world()
 	var target := _stage(w, Tuning.get_value("bot_preferred_range"))
 	var led := Aim.intercept(
-		w.player.position, w.player.bow.speed_for(1.0), target.position, target.velocity, 1.0
+		w.player.position, w.player.gun.speed(), target.position, target.velocity, 1.0
 	)
 	_runner.check(
 		_fire_and_run(w, w.player, target, led), _fail("a properly led shot at the same range hits")
@@ -167,19 +179,18 @@ func test_the_snap_shot_leads_too() -> void:
 
 	var cmd := InputCommand.new()
 	cmd.snap = true
-	cmd.draw_strength = 1.0
 	cmd.aim = Vector2.RIGHT
 
 	var hit := [false]
-	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float, _f: bool) -> void: hit[0] = true)
+	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float) -> void: hit[0] = true)
 	var run := target.velocity
 	w._try_fire(w.player, cmd)
 
-	for _i in int(Tuning.get_value("arrow_lifetime") * 60.0) + 4:
+	for _i in int(Tuning.get_value("bullet_lifetime") * 60.0) + 4:
 		target.velocity = run
 		target.prev_position = target.position
 		target.position += run * (1.0 / 60.0)
-		w._tick_arrows(1.0 / 60.0)
+		w._tick_bullets(1.0 / 60.0)
 
 	_runner.check(hit[0], _fail("a tap shot leads a running target"))
 

@@ -149,15 +149,15 @@ func _report(runs: int) -> void:
 ##
 ## The number that says whether aim skill matters, and it cannot be reasoned to.
 ## The obvious arithmetic — compare the angle you must lead by against the angle
-## a cat subtends — said leading was necessary past 75% of the bow's range. Fired
+## a cat subtends — said leading was necessary past 75% of the gun's range. Fired
 ## through the real tick loop it turned out an unled shot connected at every
-## range in the book, because the swept collision test measures the arrow's
+## range in the book, because the swept collision test measures the bullet's
 ## CLOSEST APPROACH rather than where it ends up.
 ##
-## Reported as a fraction of the bow's reach: 0.6 means you can point straight at
+## Reported as a fraction of the gun's reach: 0.6 means you can point straight at
 ## a moving cat inside 60% of your range and still hit, and must lead beyond it.
 func _probe_free_range() -> void:
-	var reach := _tuned("draw_max_speed") * _tuned("arrow_lifetime")
+	var reach := _tuned("bullet_speed") * _tuned("bullet_lifetime")
 	var free := 0.0
 	for step in 20:
 		var fraction := 0.05 + 0.05 * float(step)
@@ -171,14 +171,14 @@ func _probe_free_range() -> void:
 			% [
 				free * 100.0,
 				reach,
-				rad_to_deg(atan(_tuned("move_speed") / _tuned("draw_max_speed"))),
+				rad_to_deg(atan(_tuned("move_speed") / _tuned("bullet_speed"))),
 				rad_to_deg(atan(_tuned("fighter_radius") / reach))
 			]
 		)
 	)
 
 
-## Fires one unled arrow at a cat running perpendicular `distance` away, on open
+## Fires one unled bullet at a cat running perpendicular `distance` away, on open
 ## ground with a clear line, and says whether it connects.
 func _straight_shot_hits(distance: float) -> bool:
 	var world: Object = _sim_world.new()
@@ -215,23 +215,23 @@ func _straight_shot_hits(distance: float) -> bool:
 
 	var dir: Vector2 = (target.position - from).normalized()
 	var hit := [false]
-	world.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float, _f: bool) -> void: hit[0] = true)
+	world.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float) -> void: hit[0] = true)
 
-	var arrow: Object = world._free_arrow()
-	arrow.launch(
+	var bullet: Object = world._free_bullet()
+	bullet.launch(
 		from + dir * player.radius,
 		dir,
-		player.bow.speed_for(1.0),
+		player.gun.speed(),
 		1.0,
-		_tuned("arrow_lifetime"),
+		_tuned("bullet_lifetime"),
 		player.team
 	)
 
-	for _i in int(_tuned("arrow_lifetime") * 60.0) + 4:
+	for _i in int(_tuned("bullet_lifetime") * 60.0) + 4:
 		target.velocity = run
 		target.prev_position = target.position
 		target.position += run * DT
-		world._tick_arrows(DT)
+		world._tick_bullets(DT)
 		if hit[0]:
 			return true
 	return false

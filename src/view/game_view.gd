@@ -1,6 +1,6 @@
 class_name GameView
 extends Node2D
-## Renders the world: terrain, cats, arrows, aim preview, health bars.
+## Renders the world: terrain, cats, bullets, aim preview, health bars.
 ##
 ## Pulled out of main.gd. Reads simulation state but never writes it — anything
 ## here can be deleted and the game still plays identically, just blind.
@@ -24,7 +24,7 @@ var _canopy: Node2D
 ## Peer id -> the cat drawn for that remote player (LAN spike).
 var _remote_views: Dictionary = {}
 
-# Recent positions per arrow, for trails. Indexed to match the arrow pool so no
+# Recent positions per bullet, for trails. Indexed to match the bullet pool so no
 # lookup or allocation happens per frame.
 var _trails: Array[Array] = []
 
@@ -64,7 +64,7 @@ func _build() -> void:
 		remove_child(_canopy)
 		_canopy.queue_free()
 
-	for _i in _world.arrows.size():
+	for _i in _world.bullets.size():
 		_trails.append([])
 
 	_canopy = Node2D.new()
@@ -78,15 +78,15 @@ func _build() -> void:
 		# You are always ginger. Teammates and opponents carry the team colour,
 		# so "which of these is me" never depends on reading a team colour.
 		view.tint = Palette.CAT_PLAYER if is_player else _team_tint(f.team)
-		view.show_bow = is_player
+		view.show_gun = is_player
 		view.z_index = 2 if is_player else 1
 		add_child(view)
 		_fighter_views.append(view)
 		_chip.append(1.0)
 
 	_world.fired.connect(
-		func(_p: Vector2, _d: Vector2, draw: float) -> void:
-			_fighter_views[0].punch(Tuning.get_value("squash_amount") * (0.5 + draw))
+		func(_p: Vector2, _d: Vector2) -> void:
+			_fighter_views[0].punch(Tuning.get_value("squash_amount"))
 	)
 
 
@@ -102,7 +102,7 @@ func _sync_remote_views() -> void:
 		if not _remote_views.has(id):
 			var view := CatView.new()
 			view.tint = Palette.CAT_REMOTE
-			view.show_bow = false
+			view.show_gun = false
 			view.z_index = 1
 			add_child(view)
 			_remote_views[id] = view
@@ -144,9 +144,6 @@ func _sync_views(delta: float) -> void:
 		view.aim = f.facing
 		view.visible = f.alive() and _is_shown(f)
 
-		if f == _world.player:
-			view.draw_strength = _controls.draw_strength
-
 		# Your own side fades in cover; an enemy in cover is not drawn at all
 		# (see _is_shown). Fading a teammate rather than hiding them is
 		# deliberate: losing track of your own team is not a mechanic, it is
@@ -175,14 +172,14 @@ func _is_shown(f: Fighter) -> bool:
 
 
 func _track_trails() -> void:
-	for i in _world.arrows.size():
-		var arrow: Arrow = _world.arrows[i]
+	for i in _world.bullets.size():
+		var bullet: Bullet = _world.bullets[i]
 		var trail: Array = _trails[i]
-		if not arrow.active:
+		if not bullet.active:
 			if not trail.is_empty():
 				trail.clear()
 			continue
-		trail.append(arrow.position)
+		trail.append(bullet.position)
 		while trail.size() > TRAIL_SAMPLES:
 			trail.pop_front()
 
@@ -200,21 +197,21 @@ func _draw() -> void:
 		if f.alive() and _is_shown(f):
 			_draw_health_bar(f, _chip[i])
 
-	_draw_arrows(alpha)
-	_draw_quiver_pips()
+	_draw_bullets(alpha)
+	_draw_magazine_pips()
 
 
-func _draw_arrows(alpha: float) -> void:
-	var width := Tuning.get_value("arrow_width")
-	var length := Tuning.get_value("arrow_length")
+func _draw_bullets(alpha: float) -> void:
+	var width := Tuning.get_value("bullet_width")
+	var length := Tuning.get_value("bullet_length")
 	var trail_len := int(Tuning.get_value("trail_length"))
 
-	for i in _world.arrows.size():
-		var arrow: Arrow = _world.arrows[i]
-		if not arrow.active:
+	for i in _world.bullets.size():
+		var bullet: Bullet = _world.bullets[i]
+		if not bullet.active:
 			continue
 
-		# The trail also makes a fast arrow readable — at full draw an arrow
+		# The trail also makes a fast bullet readable — at 1400 px/s a bullet
 		# crosses a good fraction of the screen each frame.
 		if trail_len > 0:
 			var trail: Array = _trails[i]
@@ -228,8 +225,8 @@ func _draw_arrows(alpha: float) -> void:
 					width * fade
 				)
 
-		var tip := arrow.render_position(alpha)
-		var dir := arrow.velocity.normalized()
+		var tip := bullet.render_position(alpha)
+		var dir := bullet.velocity.normalized()
 		draw_line(tip - dir * length, tip, Palette.ARROW, width)
 		draw_line(tip - dir * (length * 0.25), tip, Palette.ARROW_TIP, width)
 
@@ -239,8 +236,35 @@ func _draw_arrows(alpha: float) -> void:
 ## The most recognisably Brawl Stars element in the game, and it directly
 ## answers the earlier "every twitch ruins the aim, hard to hit" complaint:
 ## it turns aiming from guesswork into something you can see before committing.
+## How strongly to draw the line of fire: 1.0 while pointing, dimmer while not.
+##
+## Static and taking the flag as an argument so the decision can be asserted
+## headlessly. The alternative was proving it through a rendered frame, and a
+## capture cannot show this at all — no render mode has a thumb on the screen —
+## so the choice was a testable function or no gate.
+static func aim_line_strength(is_aiming: bool) -> float:
+	if Tuning.get_value("reticle_enabled") < 0.5:
+		return 0.0
+	if is_aiming:
+		return 1.0
+	return clampf(Tuning.get_value("aim_line_idle_alpha"), 0.0, 1.0)
+
+
+## Drawn whether or not a thumb is down.
+##
+## It used to return early unless `is_aiming`, so the line vanished the moment
+## you released — and since the aim vanished with it, there was nothing to draw.
+## Now the aim persists, so the line persists too, dimmed: at any moment you can
+## see the shot you would take, which is what "keep a line-of-fire" means on a
+## screen. The bright version still marks the moment you are actively pointing.
 func _draw_aim_preview(alpha: float) -> void:
-	if not _controls.is_drawing or Tuning.get_value("reticle_enabled") < 0.5:
+	if Tuning.get_value("reticle_enabled") < 0.5:
+		return
+
+	# Dimmed when the thumb is up. The assist and the wall cast below run in BOTH
+	# states on purpose: a faint line that lies is worse than no faint line.
+	var strength := aim_line_strength(_controls.is_aiming)
+	if strength <= 0.0:
 		return
 
 	var pos := _world.player.render_position(alpha)
@@ -249,33 +273,36 @@ func _draw_aim_preview(alpha: float) -> void:
 		return
 
 	# The same nudge the shot itself will get. Without this the line is up to
-	# aim_assist_deg away from where the arrow goes — and now that the assist
+	# aim_assist_deg away from where the bullet goes — and because the assist
 	# LEADS a moving target, the gap it hides is exactly the interesting part:
-	# the preview would point at the cat while the arrow flew in front of it.
+	# the preview would point at the cat while the bullet flew in front of it.
 	#
 	# A preview that shows something other than the shot is the M3.1c bug and
 	# ADR-0019 in one: what is drawn has to be what happens.
 	dir = _world.assisted_aim(_world.player, dir)
 
-	var strength := _controls.draw_strength
 	# The real thing: speed x lifetime, uncapped. This used to be clamped to
 	# 620px directly under a comment claiming the preview could not lie, while
-	# an arrow actually flew 2320 — so the landing ring marked a spot the shot
-	# blew straight past. arrow_lifetime is now tuned so the honest number fits
+	# the projectile actually flew 2320 — so the landing ring marked a spot the
+	# shot blew straight past. bullet_lifetime is tuned so the honest number fits
 	# on screen, which is what made the clamp unnecessary rather than merely
 	# dishonest.
-	var reach := _world.player.bow.speed_for(strength) * Tuning.get_value("arrow_lifetime")
+	#
+	# One length, one colour, every time. The line used to grow and brighten with
+	# the draw; with every shot identical, a preview that still varied would be
+	# animating information that no longer exists.
+	var reach := _world.player.gun.reach()
 	var start := pos + dir * _world.player.radius
 	var end := start + dir * reach
 
-	# Stop at the first wall, using the same cast the arrows themselves use.
+	# Stop at the first wall, using the same cast the bullets themselves use.
 	# Without this the line crosses stone and promises a shot the arena refuses.
 	var wall: Dictionary = _world.arena.cast_segment(start, end)
 	var blocked: bool = wall["hit"]
 	if blocked:
 		end = wall["point"]
 
-	var col := Palette.AIM.lerp(Color.WHITE, strength)
+	var col := Palette.AIM.lerp(Color.WHITE, 0.65)
 	if blocked:
 		# A blocked line reads as blocked, rather than as a shorter good one.
 		col = col.lerp(Palette.WALL_TOP, 0.55)
@@ -285,29 +312,21 @@ func _draw_aim_preview(alpha: float) -> void:
 	for i in dots:
 		var t := float(i) / float(maxi(dots - 1, 1))
 		var p := start.lerp(end, t)
-		var fade := (1.0 - t) * (0.25 + 0.55 * strength)
+		var fade := (1.0 - t) * 0.7 * strength
 		draw_circle(p, lerpf(4.5, 2.0, t), Color(col.r, col.g, col.b, fade))
 
-	draw_arc(
-		end,
-		lerpf(10.0, 22.0, strength),
-		0.0,
-		TAU,
-		20,
-		Color(col.r, col.g, col.b, 0.5 + 0.4 * strength),
-		2.5
-	)
+	draw_arc(end, 18.0, 0.0, TAU, 20, Color(col.r, col.g, col.b, 0.8 * strength), 2.5)
 
 
 ## Ammo under the hero, in WORLD space, where Brawl Stars puts it and where the
 ## eye already is mid-fight. It used to sit at the bottom of the screen, which
-## meant looking away from the fight to count arrows.
-func _draw_quiver_pips() -> void:
+## meant looking away from the fight to count rounds.
+func _draw_magazine_pips() -> void:
 	var f := _world.player
 	if not f.alive():
 		return
 
-	var capacity := f.bow.capacity()
+	var capacity := f.gun.capacity()
 	if capacity <= 0:
 		return
 
@@ -323,7 +342,7 @@ func _draw_quiver_pips() -> void:
 		# a cat standing behind it.
 		draw_rect(r.grow(1.5), Color(0.05, 0.06, 0.08, 0.6))
 		draw_rect(r, Color(1, 1, 1, 0.18))
-		if i < f.bow.quiver:
+		if i < f.gun.magazine:
 			draw_rect(r, Palette.ARROW)
 
 

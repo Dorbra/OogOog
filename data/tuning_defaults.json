@@ -5,11 +5,11 @@
     "min": 0.0,
     "value": 4.0
   },
-  "aim_min_drag": {
-    "group": "Controls",
-    "max": 200.0,
+  "aim_line_idle_alpha": {
+    "group": "Aim assist",
+    "max": 1.0,
     "min": 0.0,
-    "value": 40.0
+    "value": 0.35
   },
   "aim_smoothing": {
     "group": "Controls",
@@ -17,29 +17,11 @@
     "min": 1.0,
     "value": 16.0
   },
-  "arrow_length": {
-    "group": "Bow",
-    "max": 90.0,
-    "min": 6.0,
-    "value": 47.0
-  },
-  "arrow_lifetime": {
-    "group": "Bow",
-    "max": 5.0,
-    "min": 0.2,
-    "value": 0.44
-  },
-  "arrow_width": {
-    "group": "Bow",
-    "max": 16.0,
-    "min": 1.0,
-    "value": 9.0
-  },
   "auto_repeat": {
     "group": "Bow",
     "max": 1.0,
     "min": 0.0,
-    "value": 1.0
+    "value": 0.0
   },
   "autoaim_radius": {
     "group": "Aim assist",
@@ -107,11 +89,23 @@
     "min": 0.0,
     "value": 0.2
   },
+  "bot_strafe_duty": {
+    "group": "Bots",
+    "max": 1.0,
+    "min": 0.1,
+    "value": 0.6
+  },
   "bot_strafe_flip_time": {
     "group": "Bots",
     "max": 5.0,
     "min": 0.1,
-    "value": 1.2
+    "value": 2.2
+  },
+  "bot_strafe_weight": {
+    "group": "Bots",
+    "max": 1.0,
+    "min": 0.0,
+    "value": 0.55
   },
   "bot_team_size": {
     "group": "Bots",
@@ -119,11 +113,35 @@
     "min": 1.0,
     "value": 3.0
   },
-  "bow_size": {
-    "group": "Art",
-    "max": 50.0,
+  "bullet_damage": {
+    "group": "Gun",
+    "max": 150.0,
+    "min": 5.0,
+    "value": 28.0
+  },
+  "bullet_length": {
+    "group": "Gun",
+    "max": 90.0,
     "min": 6.0,
-    "value": 20.0
+    "value": 47.0
+  },
+  "bullet_lifetime": {
+    "group": "Gun",
+    "max": 2.0,
+    "min": 0.05,
+    "value": 0.165
+  },
+  "bullet_speed": {
+    "group": "Gun",
+    "max": 3500.0,
+    "min": 300.0,
+    "value": 1400.0
+  },
+  "bullet_width": {
+    "group": "Gun",
+    "max": 16.0,
+    "min": 1.0,
+    "value": 9.0
   },
   "camera_smoothing": {
     "group": "Camera",
@@ -143,42 +161,6 @@
     "min": 0.0,
     "value": 1.0
   },
-  "draw_max_damage": {
-    "group": "Bow",
-    "max": 150.0,
-    "min": 5.0,
-    "value": 28.0
-  },
-  "draw_max_deviation_deg": {
-    "group": "Bow",
-    "max": 45.0,
-    "min": 0.0,
-    "value": 8.0
-  },
-  "draw_max_speed": {
-    "group": "Bow",
-    "max": 3500.0,
-    "min": 200.0,
-    "value": 520.0
-  },
-  "draw_min_damage": {
-    "group": "Bow",
-    "max": 60.0,
-    "min": 1.0,
-    "value": 10.0
-  },
-  "draw_min_speed": {
-    "group": "Bow",
-    "max": 2000.0,
-    "min": 100.0,
-    "value": 320.0
-  },
-  "draw_time_full": {
-    "group": "Bow",
-    "max": 1.5,
-    "min": 0.05,
-    "value": 0.45
-  },
   "fighter_health": {
     "group": "Regen",
     "max": 400.0,
@@ -190,6 +172,18 @@
     "max": 29.0,
     "min": 12.0,
     "value": 29.0
+  },
+  "fire_interval": {
+    "group": "Gun",
+    "max": 1.5,
+    "min": 0.05,
+    "value": 0.35
+  },
+  "gun_size": {
+    "group": "Art",
+    "max": 60.0,
+    "min": 6.0,
+    "value": 22.0
   },
   "hitstop_hit": {
     "group": "Feel",
@@ -221,6 +215,12 @@
     "min": 0.0,
     "value": 156.0
   },
+  "magazine_size": {
+    "group": "Gun",
+    "max": 12.0,
+    "min": 1.0,
+    "value": 5.0
+  },
   "match_countdown": {
     "group": "Match",
     "max": 10.0,
@@ -231,7 +231,7 @@
     "group": "Match",
     "max": 50.0,
     "min": 1.0,
-    "value": 10.0
+    "value": 14
   },
   "match_time_limit": {
     "group": "Match",
@@ -269,18 +269,6 @@
     "min": 0.0,
     "value": 52.0
   },
-  "quiver_refill_time": {
-    "group": "Quiver",
-    "max": 5.0,
-    "min": 0.1,
-    "value": 1.1
-  },
-  "quiver_size": {
-    "group": "Quiver",
-    "max": 8.0,
-    "min": 1.0,
-    "value": 5.0
-  },
   "regen_delay": {
     "group": "Regen",
     "max": 10.0,
@@ -292,6 +280,12 @@
     "max": 100.0,
     "min": 1.0,
     "value": 20.0
+  },
+  "reload_time": {
+    "group": "Gun",
+    "max": 5.0,
+    "min": 0.1,
+    "value": 1.1
   },
   "respawn_time": {
     "group": "Regen",
@@ -352,12 +346,6 @@
     "max": 90.0,
     "min": 0.0,
     "value": 14.0
-  },
-  "snap_damage_mult": {
-    "group": "Aim assist",
-    "max": 1.0,
-    "min": 0.1,
-    "value": 1.0
   },
   "snap_max_drag": {
     "group": "Aim assist",

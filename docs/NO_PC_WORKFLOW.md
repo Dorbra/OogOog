@@ -34,7 +34,7 @@ var speed := Tuning.get_value("move_speed")     # never a `const`
 ```
 
 Tap **DBG** (top-right) for a slider per parameter, grouped by
-Movement / Bow / Quiver / Aim assist / Feel / Camera / Art / Regen / Targets.
+Movement / Gun / Aim assist / Bots / Feel / Camera / Art / Regen / Match.
 
 **The workflow this creates:** tune on the phone in real time → **Copy JSON** →
 paste into chat → the values are committed as the new defaults. That collapses a
@@ -44,6 +44,19 @@ tunable at all ([ADR-0004](decisions/0004-runtime-tuning.md)).
 `test_tuning_keys.gd` scans the source for every `Tuning.get_value("…")` and
 asserts the key exists. A missing key returns `0.0` with only a pushed error —
 on a phone that looks like "the game is broken" with no visible cause.
+
+### Save pins a value on the device — permanently
+
+**Read the badge at the top of the tuning panel before judging any build.**
+
+`Save` writes `user://tuning.json`, which is loaded over the shipped defaults key
+by key and **survives an APK update**. So a saved value is pinned on that device
+and no later release can move it. Two releases were once judged on numbers the
+phone was not running because of exactly this.
+
+The badge names every key currently overriding the build, the same list goes to
+the Log tab at boot, and **Reset** clears the file, the values and the badge
+together ([ADR-0021](decisions/0021-a-tuning-override-must-be-visible.md)).
 
 ## 2. The game reports on itself
 

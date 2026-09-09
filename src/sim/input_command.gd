@@ -17,14 +17,17 @@ var move: Vector2 = Vector2.ZERO
 ## Desired aim direction, normalised (or zero when not aiming).
 var aim: Vector2 = Vector2.ZERO
 
-## How far the bow is drawn this tick, 0..1. Power, not direction.
-var draw_strength: float = 0.0
-
-## True on the single tick the shot is released.
+## True on the single tick a shot is fired.
+##
+## There is no longer a power axis alongside it. Draw strength lived here until
+## the charge-up it represented turned out to BE the sluggishness — every shot
+## is now the same shot, and what varies between them will come from the class
+## you picked rather than how long you held your thumb down (ADR-0022).
 var fire: bool = false
 
-## True when the release was a snap shot (little drag, little hold): weak, but
-## auto-aimed. Meaningful only on the tick `fire` is true.
+## True when the shot was a tap rather than an aimed drag: auto-aimed, and it
+## leads the target. No damage penalty — it is what a five-year-old uses.
+## Meaningful only on the tick `fire` is true.
 var snap: bool = false
 
 ## True on the single tick an ability is triggered. Unused until M4.
@@ -34,7 +37,6 @@ var ability: bool = false
 func clear() -> void:
 	move = Vector2.ZERO
 	aim = Vector2.ZERO
-	draw_strength = 0.0
 	fire = false
 	snap = false
 	ability = false

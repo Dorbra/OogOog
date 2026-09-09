@@ -52,22 +52,22 @@ func _concerns_player(event_position: Vector2) -> bool:
 
 func listen_to(world: SimWorld) -> void:
 	world.hit.connect(
-		func(p: Vector2, _d: Vector2, _dmg: float, full: bool) -> void:
+		func(p: Vector2, _d: Vector2, _dmg: float) -> void:
 			if _concerns_player(p):
-				add_trauma(Tuning.get_value("shake_hit") * (1.5 if full else 1.0))
+				add_trauma(Tuning.get_value("shake_hit"))
 	)
 	world.killed.connect(
 		func(p: Vector2, _d: Vector2, _team: int) -> void:
 			if _concerns_player(p):
 				add_trauma(Tuning.get_value("shake_kill"))
 	)
-	# Firing shakes nothing by default (`shake_fire` is 0). Your own bowstring
+	# Firing shakes nothing by default (`shake_fire` is 0). Your own gun
 	# moving the camera is not something the reference game does, and at five
-	# arrows a second it was the largest single contributor to the jitter.
+	# shots a second it was the largest single contributor to the jitter.
 	world.fired.connect(
-		func(p: Vector2, _d: Vector2, draw: float) -> void:
+		func(p: Vector2, _d: Vector2) -> void:
 			if _concerns_player(p):
-				add_trauma(Tuning.get_value("shake_fire") * draw)
+				add_trauma(Tuning.get_value("shake_fire"))
 	)
 
 

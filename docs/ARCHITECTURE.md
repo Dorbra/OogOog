@@ -87,7 +87,7 @@ Main (Node2D)                       ← src/main.gd, composition root
 ├── Fx (Node2D)                     ← pooled particles/numbers/rings, hitstop
 └── CanvasLayer (layer 1)           ← SCREEN space, not world space
     ├── overlay (Node2D)            ← floating joystick
-    └── Hud (Node2D)                ← quiver pips, build stamp
+    └── Hud (Node2D)                ← build stamp (magazine pips are in GameView)
 ```
 
 Plus two autoloads declared in `project.godot`:
@@ -165,10 +165,10 @@ second path that damages something quietly ([ADR-0007](decisions/0007-typed-sim-
 
 | Type | Owns | Notably does *not* own |
 |---|---|---|
-| `Fighter` | position, velocity, facing, `team`, `Health`, `Bow`, knockback, respawn | who is driving it |
+| `Fighter` | position, velocity, facing, `team`, `Health`, `Gun`, knockback, respawn | who is driving it |
 | `Health` | hp, regen, death latch | anything visual |
-| `Bow` | quiver, refill accumulator, draw→(speed, damage, deviation) curves | the arrow |
-| `Arrow` | position, velocity, damage, lifetime, `full_draw` | what it hits |
+| `Gun` | magazine, reload accumulator, fire-rate cooldown | the bullet |
+| `Bullet` | position, velocity, damage, lifetime, `owner_team` | what it hits |
 | `Arena` | grid, bounds, spawns, collision queries | anything that moves |
 
 ### Collision is pure maths, not a physics engine
@@ -176,10 +176,10 @@ second path that damages something quietly ([ADR-0007](decisions/0007-typed-sim-
 No `Area2D`, no `PhysicsBody2D`, no collision layers
 ([ADR-0008](decisions/0008-no-physics-engine.md)). Three algorithms:
 
-- **Arrow vs. target — swept circle.** At full draw an arrow covers ~24 px per
+- **Bullet vs. target — swept circle.** At 1400 px/s a bullet covers ~23 px per
   tick against a 42 px target radius. Testing only the endpoint would let fast
-  shots tunnel through. `Arrow.hits_circle()` tests the *segment travelled*.
-- **Arrow vs. wall — DDA grid traversal** (Amanatides & Woo). Exact, ~25 lines,
+  shots tunnel through. `Bullet.hits_circle()` tests the *segment travelled*.
+- **Bullet vs. wall — DDA grid traversal** (Amanatides & Woo). Exact, ~25 lines,
   and unit-testable. Sampling points along the segment would reintroduce
   tunnelling in a second place, which is not a trade worth making for fewer
   lines.

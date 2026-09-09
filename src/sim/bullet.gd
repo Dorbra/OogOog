@@ -1,10 +1,12 @@
-class_name Arrow
+class_name Bullet
 extends RefCounted
 ## A travelling projectile.
 ##
-## Arrows travel rather than hitscan: you have to lead a moving target, shots
-## can be dodged, and the flight is readable on a small screen. It also keeps
-## the door open for LAN later, where hitscan across latency is miserable.
+## Bullets travel rather than hitscan even now that they are fast: a shot can be
+## dodged, the flight is readable on a small screen, and it keeps the door open
+## for LAN later, where hitscan across latency is miserable. At 1400 px/s the
+## flight is 165 ms to maximum range, which is short enough that where the shot
+## lands is something you can read rather than predict.
 ##
 ## Pooled — never freed and reallocated mid-match. GDScript allocation churn
 ## surfaces as frame hitches, and retrofitting pooling later is tedious.
@@ -16,14 +18,9 @@ var damage: float = 0.0
 var life: float = 0.0
 var active: bool = false
 
-## Whether this arrow came from a committed full draw. Carried on the projectile
-## rather than looked up at impact, because by then the draw is long over.
-var full_draw: bool = false
-
-## Team of whoever loosed it. Carried here for the same reason as full_draw: at
-## the moment of impact the shooter may already be dead, and an arrow in flight
-## has to keep knowing whose it was. This is what makes friendly fire
-## rejectable.
+## Team of whoever fired it. Carried on the projectile because at the moment of
+## impact the shooter may already be dead, and a bullet in flight has to keep
+## knowing whose it was. This is what makes friendly fire rejectable.
 var owner_team: int = 0
 
 
@@ -61,8 +58,9 @@ func render_position(alpha: float) -> Vector2:
 
 ## Swept collision test against a circle.
 ##
-## A fast arrow can cross a whole target between two ticks, so testing only the
-## end point would let shots pass through. This tests the segment travelled.
+## A fast bullet crosses a whole target between two ticks — at 1400 px/s that is
+## 23 px per tick against a 58 px cat — so testing only the end point would let
+## shots pass straight through. This tests the segment travelled.
 func hits_circle(centre: Vector2, radius: float) -> bool:
 	var segment := position - prev_position
 	var to_centre := centre - prev_position
