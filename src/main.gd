@@ -117,6 +117,10 @@ func _physics_process(delta: float) -> void:
 	# frame event driving a fixed 60 Hz simulation — two clocks that agreed only
 	# by accident. Firing is a state now, so the state is what gets read.
 	_cmd.fire = controls.is_firing
+	# take_ability() CONSUMES the edge, so one tap is one ability however many
+	# rendered frames pass before the next simulation tick. Reading a boolean
+	# without clearing it would fire on every tick the thumb stayed down.
+	_cmd.ability = controls.take_ability()
 
 	world.tick(_cmd, delta)
 

@@ -69,14 +69,18 @@ screen. This is why:
   bullet, one behaviour, nothing to learn before you can hit anything.
 - Damage numbers are outlined, so they read against grass and stone alike.
 
-### II. Aim is the skill, and the game must not punish you for lacking it
+### II. Where you stand is the decision, and aim must not punish you
 
 This pillar used to read *"commitment must be rewarded"*, and described a
 tension between a slow precise full draw and an instant weak snap shot. Both
-halves of that are gone: the draw curve was deleted with the bow, and the tap
-shot was deleted when the gun went automatic. Neither was replaced, which is an
-honest debt rather than a design — **there is currently no shooting decision to
-make beyond where to point**, and M3.4's class asymmetry is what owes it.
+halves went with the bow and with automatic fire, and for four milestones
+nothing replaced them — there was no shooting decision beyond where to point.
+
+**Classes are the replacement, and the axis moved from time to distance.** The
+draw asked "how long will you commit before firing"; a class asks "where are you
+willing to stand". A Skirmisher inside 74 px does 50 damage a shot and 17
+outside it, so closing is the whole game for one class and refusing to let it
+close is the whole game for the other.
 
 What survives is the audience rule underneath it: a five-year-old must be able
 to hit things. Auto-aim is a narrow leading nudge that costs nothing, never a
@@ -156,6 +160,8 @@ their spawns at the start of a round.
 | Deviation | none |
 | Fire interval | 0.18 s → 5.6 shots/s in a burst |
 | Magazine / reload | 5 rounds (0.9 s of continuous fire), one back every 0.55 s |
+| Classes | Ranger (the numbers above) and Skirmisher (3 pellets, 46° fan, 0.42× damage, 0.62× range, 0.8× interval, 1.18× walk, 1.55× health) |
+| Abilities | Charged by damage dealt, 400 hp a bar. Ranger dashes; Skirmisher drops caltrops |
 | Required lead | 6.1°, against a cat subtending 7.2° |
 
 Measured over 24 seeded matches: **40.5 kills, a cat lives ~17 s, ~7 deaths
@@ -163,11 +169,16 @@ each** — 3.2× the lethality of the first gun tuning, chosen deliberately afte
 being shown that number ([ADR-0025](decisions/0025-a-rate-is-not-a-count.md)).
 `match_target_kills` is 35 so the clock decides 24 matches in 24.
 
-That last row is the design in one line: **point at a cat and the bullet arrives
-where you pointed**, at every range. Nothing varies between one shot and the
-next, which is a real loss — the draw curve was the only shooting depth there
-was. Class asymmetry in M3.4 is what replaces it, and until then the shooting is
-deliberately plain.
+That last row is the Ranger in one line: **point at a cat and the bullet arrives
+where you pointed**, at every range.
+
+**It is no longer the whole story.** That paragraph used to end "nothing varies
+between one shot and the next, which is a real loss", and it was true for four
+milestones. Classes are what pays it back
+([ADR-0028](decisions/0028-a-class-is-a-multiplier.md)): a Skirmisher fires
+three pellets in a 46° fan at 62% of the range, so where you stand decides
+whether you do 50 damage or 17. That is a decision, made several times a second,
+which is what shooting had stopped asking for.
 
 **Reach is not a free parameter.** 231 px sits inside the 248 px shortest
 half-axis of what the camera shows, and

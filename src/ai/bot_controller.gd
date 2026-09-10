@@ -114,6 +114,8 @@ func think(me: Fighter, world: SimWorld, delta: float) -> InputCommand:
 	var target := _acquire(me, world)
 	state = _choose_state(me, world, target)
 
+	_maybe_use_ability(me, target)
+
 	match state:
 		State.RETREAT:
 			_do_retreat(me, world, target)
@@ -125,6 +127,45 @@ func think(me: Fighter, world: SimWorld, delta: float) -> InputCommand:
 			_do_seek(me, world)
 
 	return _cmd
+
+
+## Bots spend their charge the moment it is worth spending, per class.
+##
+## Deliberately NOT "the instant it is full". A dash burned on empty ground and
+## caltrops dropped where nobody will walk are both worse than holding, and a
+## bot that visibly wastes its ability teaches a child that abilities are
+## pointless. The condition is what the ability is FOR:
+##
+##   dash     — close the gap, so only with a target that is too far to shoot.
+##   caltrops — cover a retreat, so only while actually retreating.
+##
+## Gated on skill like everything else a bot decides: at low skill it fires them
+## more or less at random, which is a five-year-old's own ability usage and
+## exactly the difficulty this dial exists to serve.
+func _maybe_use_ability(me: Fighter, target: Fighter) -> void:
+	if not me.ability_ready():
+		return
+
+	match me.fighter_class.ability:
+		"dash":
+			# Nothing to close on, or already in range: hold it.
+			if target == null:
+				return
+			if me.position.distance_to(target.position) <= me.gun.effective_range():
+				return
+		"caltrops":
+			if state != State.RETREAT:
+				return
+		_:
+			return
+
+	# A low-skill bot sometimes just does not think of it. At skill 1.0 this is
+	# certain; at 0 it is a coin flip per opportunity, which reads as a bot that
+	# forgets it has an ability rather than one that is bad at aiming it.
+	if _rng.randf() > lerpf(0.5, 1.0, _skill()):
+		return
+
+	_cmd.ability = true
 
 
 func _tick_timers(delta: float) -> void:

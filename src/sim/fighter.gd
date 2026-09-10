@@ -56,6 +56,15 @@ var controller: Variant = null
 
 var respawn_timer: float = 0.0
 
+## Ability charge, 0 to 1. Full means the button does something.
+##
+## Earned by damage DEALT, never by a clock. A cooldown pays you for waiting;
+## this pays you for fighting, which is the behaviour a three-minute match
+## needs and the one Brawl Stars built its Super on. It also means a player who
+## is losing a fight does not additionally get their ability last — they get it
+## for the damage they did land (ADR-0029).
+var charge: float = 0.0
+
 ## Counts down after firing. While it is above zero this fighter is visible even
 ## from inside a bush: firing gives your position away, which is what stops an
 ## ambusher from sitting in cover killing people with impunity.
@@ -145,6 +154,9 @@ func respawn() -> void:
 	position = spawn_point
 	prev_position = spawn_point
 	reveal_timer = 0.0
+	# Charge SURVIVES death on purpose. Losing it would punish the player who is
+	# already losing, hardest at the moment they need the comeback most — the
+	# opposite of "competitive but not punishing" (ADR-0013).
 	gun = Gun.new(fighter_class)
 
 
@@ -153,6 +165,29 @@ func take_damage(amount: float) -> float:
 	if not health.alive():
 		respawn_timer = Tuning.get_value("respawn_time")
 	return applied
+
+
+## Pays this fighter for `damage` landed on somebody else.
+##
+## Capped at 1.0 rather than banked: overkill on a dying target should not buy
+## the next ability early, and a Skirmisher landing three pellets at once must
+## not be paid three times over for one trigger pull it already earned.
+func add_charge(damage: float) -> void:
+	var needed := maxf(Tuning.get_value("ability_charge_damage"), 1.0)
+	charge = minf(1.0, charge + damage / needed)
+
+
+func ability_ready() -> bool:
+	return charge >= 1.0 and alive()
+
+
+## Spends the whole bar. Returns false and changes nothing when it is not full,
+## so a caller cannot half-fire an ability.
+func spend_charge() -> bool:
+	if not ability_ready():
+		return false
+	charge = 0.0
+	return true
 
 
 func apply_knockback(dir: Vector2, force: float) -> void:

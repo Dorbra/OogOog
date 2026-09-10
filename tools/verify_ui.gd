@@ -126,6 +126,8 @@ func _run(main: Node) -> void:
 	await process_frame
 	_check(chosen.size() > before, "tapping play starts a match")
 
+	await _check_class_picker(main, screens)
+	_check_ability_button(main)
 	_check_override_badge()
 	_check_frame_readout()
 
@@ -152,6 +154,81 @@ func _run(main: Node) -> void:
 ## Tuning.overridden_keys() proves the DATA is right and proves nothing about
 ## whether anybody can see it — which is the exact gap that shipped an untappable
 ## setup screen (ADR-0019).
+## Tapping a class must actually change the gun the player fights with.
+##
+## The data half of this is already covered by test_classes.gd. What that cannot
+## prove is that a thumb landing on the icon reaches the code at all — which is
+## exactly the gap that shipped a setup screen nobody could dismiss (ADR-0019).
+## For a five-year-old who cannot read, an unreachable picker is not a degraded
+## experience, it is the whole game stuck on one class.
+func _check_class_picker(main: Node, screens: Node) -> void:
+	var tuning: Node = root.get_node_or_null("Tuning")
+	if tuning == null:
+		return
+
+	var count := int(FighterClass.count())
+	_check(count >= 2, "there are at least two classes to pick between")
+	if count < 2:
+		return
+
+	for i in count:
+		main.get("world").match_state.phase = SETUP
+		await process_frame
+		_tap(screens._class_rect(i).get_center())
+		await process_frame
+		_check(
+			int(tuning.call("get_value", "player_class")) == i,
+			(
+				"tapping class icon %d selects it (got %d)"
+				% [i, int(tuning.call("get_value", "player_class"))]
+			)
+		)
+
+	# And the choice has to survive into the built world, not merely into a
+	# tuning value nothing reads.
+	tuning.call("set_value", "player_class", 1.0)
+	main.get("world").match_state.phase = SETUP
+	await process_frame
+	_tap(screens._play_rect().get_center())
+	await process_frame
+	await process_frame
+	var built: Variant = main.get("world")
+	_check(
+		built.player.fighter_class.id == FighterClass.at(1).id,
+		"the picked class reaches the fight (player is a %s)" % built.player.fighter_class.id
+	)
+	tuning.call("set_value", "player_class", 0.0)
+
+
+## The ability button has to be reachable, and must NOT steer the aim.
+##
+## Its whole risk is where it lives: inside the right half of the screen, which
+## already means "aim and fire". A button there that fell through to the aim
+## router would fire the ability AND swing the gun to the bottom-right corner
+## every time it was pressed.
+func _check_ability_button(main: Node) -> void:
+	var controls: Variant = main.get("controls")
+	_check(controls != null, "the main scene exposes its touch controls")
+	if controls == null:
+		return
+
+	var rect: Rect2 = controls.call("ability_rect")
+	var view: Vector2 = root.get_visible_rect().size
+	_check(rect.size.x > 40.0, "the ability button is big enough for a thumb")
+	_check(
+		Rect2(Vector2.ZERO, view).encloses(rect),
+		"and it is fully on screen (%s in %s)" % [rect, view]
+	)
+
+	var aim_before: Vector2 = controls.get("aim_vector")
+	controls.call("_assign_finger", 7, rect.get_center())
+	_check(controls.call("take_ability"), "pressing it raises the ability edge")
+	_check(not controls.call("take_ability"), "and the edge is consumed, so one tap is one ability")
+	_check(controls.get("aim_vector") == aim_before, "and pressing it does not steer the aim")
+	_check(not controls.get("is_firing"), "and does not start firing")
+	controls.call("_release_finger", 7)
+
+
 func _check_override_badge() -> void:
 	var overlay: Node = root.get_node_or_null("DebugOverlay")
 	_check(overlay != null, "the debug overlay exists")

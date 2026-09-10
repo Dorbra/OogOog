@@ -37,6 +37,18 @@ var aim_vector: Vector2 = Vector2.ZERO
 ## SimWorld reads it as `cmd.fire`; the view reads it to brighten the aim line.
 var is_firing: bool = false
 
+## True for exactly ONE tick after the ability button is tapped.
+##
+## An edge, unlike is_firing, because an ability is a single event and the
+## charge bar is what gates repeats. Consumed by take_ability() rather than
+## cleared on release, so a slow frame cannot swallow the tap and a long press
+## cannot fire it twice.
+var _ability_pressed: bool = false
+
+## Finger currently held on the ability button, so a thumb resting there does
+## not also steer the aim.
+var _ability_finger: int = UNASSIGNED
+
 # Finger index -> origin, for each side. -1 means "no finger on this side".
 var _move_finger: int = UNASSIGNED
 var _move_origin: Vector2 = Vector2.ZERO
@@ -46,19 +58,26 @@ var _aim_finger: int = UNASSIGNED
 var _aim_origin: Vector2 = Vector2.ZERO
 var _aim_current: Vector2 = Vector2.ZERO
 
+## Both halves of the viewport size, tracked here rather than asked for on
+## demand. TouchControls is a plain Node — it has no get_viewport_rect() — and
+## the headless tests build one outside any tree, so reaching for the viewport
+## inside a touch handler crashed two of them the moment the ability button
+## started needing the screen HEIGHT as well as its width.
 var _screen_width: float = 1280.0
+var _screen_size: Vector2 = Vector2(1280, 720)
 
 
 func _ready() -> void:
 	# Without this, drag events are coalesced per frame and the draw gesture
 	# feels laggy in exactly the way that is hardest to diagnose on a phone.
 	Input.set_use_accumulated_input(false)
-	_screen_width = get_viewport().get_visible_rect().size.x
+	_on_viewport_resized()
 	get_viewport().size_changed.connect(_on_viewport_resized)
 
 
 func _on_viewport_resized() -> void:
-	_screen_width = get_viewport().get_visible_rect().size.x
+	_screen_size = get_viewport().get_visible_rect().size
+	_screen_width = _screen_size.x
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -75,7 +94,38 @@ func _handle_touch(event: InputEventScreenTouch) -> void:
 		_release_finger(event.index)
 
 
+## Where the ability button sits, in screen space.
+##
+## Bottom-right, above where the firing thumb rests, and safe-area aware — the
+## Pixel 9's gesture-nav inset eats exactly this corner. It is checked BEFORE
+## the aim half, or the button would be unreachable: it lives inside the right
+## half, and the right half already means "aim and fire".
+func ability_rect() -> Rect2:
+	var view := _screen_size
+	var inset := SafeArea.margins(view)
+	var size := Tuning.get_value("ability_button_size")
+	return Rect2(
+		Vector2(view.x - inset.z - size - 24.0, view.y - inset.w - size - 150.0),
+		Vector2(size, size)
+	)
+
+
+## Reads and clears the one-tick ability edge.
+func take_ability() -> bool:
+	var pressed := _ability_pressed
+	_ability_pressed = false
+	return pressed
+
+
 func _assign_finger(index: int, position: Vector2) -> void:
+	# The button first. It is inside the right half, and the right half means
+	# "aim and fire" — so without this the button could never be pressed without
+	# also swinging the aim to wherever the thumb happened to land.
+	if ability_rect().has_point(position):
+		_ability_finger = index
+		_ability_pressed = true
+		return
+
 	var is_left := position.x < _screen_width * 0.5
 	if is_left:
 		if _move_finger == UNASSIGNED:
@@ -90,6 +140,9 @@ func _assign_finger(index: int, position: Vector2) -> void:
 
 
 func _release_finger(index: int) -> void:
+	if index == _ability_finger:
+		_ability_finger = UNASSIGNED
+		return
 	if index == _move_finger:
 		_move_finger = UNASSIGNED
 		move_vector = Vector2.ZERO
@@ -113,6 +166,10 @@ func _release_finger(index: int) -> void:
 
 func _handle_drag(event: InputEventScreenDrag) -> void:
 	# Position is irrelevant here — only which finger this is.
+	if event.index == _ability_finger:
+		# A thumb sliding off the button steers nothing. Without this, pressing
+		# the ability and then drifting would fight the aim.
+		return
 	if event.index == _move_finger:
 		_move_current = event.position
 	elif event.index == _aim_finger:

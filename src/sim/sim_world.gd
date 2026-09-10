@@ -20,8 +20,15 @@ signal hit(position: Vector2, direction: Vector2, damage: float)
 signal killed(position: Vector2, direction: Vector2, scoring_team: int)
 signal fired(position: Vector2, direction: Vector2)
 signal bullet_expired(position: Vector2)
+## An ability went off. `kind` is the class's ability id, so the view can pick
+## an effect without knowing what any of them do.
+signal ability_used(position: Vector2, direction: Vector2, kind: String)
 
 const BULLET_POOL_SIZE := 150
+
+## Six fighters, and caltrops outlive their dropper. Twelve is two patches each
+## in the air at once, which no reasonable charge rate can exceed.
+const HAZARD_POOL_SIZE := 12
 
 ## Upper bound on a side, and the number of spawn cells a team takes. The actual
 ## side size is the `bot_team_size` slider; this only caps what the arena's `P`
@@ -42,6 +49,7 @@ var match_state := MatchState.new()
 var player: Fighter
 var fighters: Array[Fighter] = []
 var bullets: Array[Bullet] = []
+var hazards: Array[Hazard] = []
 var arena: Arena
 var bounds: Rect2 = Rect2(0, 0, 1280, 720)
 
@@ -60,6 +68,10 @@ func _init(from_arena: Arena = null) -> void:
 	bullets.resize(BULLET_POOL_SIZE)
 	for i in BULLET_POOL_SIZE:
 		bullets[i] = Bullet.new()
+
+	hazards.resize(HAZARD_POOL_SIZE)
+	for i in HAZARD_POOL_SIZE:
+		hazards[i] = Hazard.new()
 
 	_build_teams()
 	match_state.reset()
@@ -168,7 +180,11 @@ func tick(cmd: InputCommand, delta: float) -> void:
 		if f_cmd.fire and f.alive():
 			_try_fire(f, f_cmd)
 
+		if f_cmd.ability and f.alive():
+			_try_ability(f)
+
 	_tick_bullets(delta)
+	_tick_hazards(delta)
 
 
 func _command_for(f: Fighter, delta: float) -> InputCommand:
@@ -215,6 +231,91 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 	fired.emit(origin, dir)
 
 
+## Spends a full charge bar on whatever this fighter's class carries.
+##
+## Dispatched by NAME from the class table rather than by a type hierarchy or a
+## match on the class itself. Adding the lobber's burning zone next PR is then a
+## line in classes.json plus a branch here, and nothing else in the simulation
+## has to learn that a third class exists.
+func _try_ability(user: Fighter) -> void:
+	if not user.spend_charge():
+		return
+
+	var dir := user.facing
+	match user.fighter_class.ability:
+		"dash":
+			_do_dash(user, dir)
+		"caltrops":
+			_do_caltrops(user)
+		_:
+			# An unknown ability spends nothing, because spend_charge() already
+			# took the bar. Refund it rather than silently eating the reward for
+			# a whole fight's worth of damage.
+			user.charge = 1.0
+			push_error("SimWorld: unknown ability '%s'" % user.fighter_class.ability)
+			return
+
+	ability_used.emit(user.position, dir, user.fighter_class.ability)
+
+
+## A shove along the aim, using the SAME knockback path a bullet uses.
+##
+## Not a teleport and not a speed buff: an impulse, which means Fighter's own
+## wall push-out stops it dead at stone with no extra collision code, and the
+## existing friction bleeds it off. A dash that crossed walls would be a hole in
+## the arena, not an ability.
+func _do_dash(user: Fighter, dir: Vector2) -> void:
+	user.apply_knockback(dir, Tuning.get_value("dash_force"))
+
+
+## Drops a patch of caltrops on the ground the dropper is standing on.
+##
+## AT THE DROPPER, not thrown ahead. A thrown one needs an aim, a travel time
+## and a landing preview, and it turns a panic button into a skill shot — which
+## is the wrong shape for the youngest player and the wrong shape for the class:
+## a Skirmisher drops these while backing out of a fight it is losing.
+func _do_caltrops(user: Fighter) -> void:
+	var hazard := _free_hazard()
+	if hazard == null:
+		return
+	hazard.arm(
+		user.position,
+		Tuning.get_value("caltrops_radius"),
+		Tuning.get_value("caltrops_damage_per_second"),
+		Tuning.get_value("caltrops_time"),
+		user.team,
+		user.get_instance_id()
+	)
+
+
+func _free_hazard() -> Hazard:
+	for hazard in hazards:
+		if not hazard.active:
+			return hazard
+	return null
+
+
+## Hazards hurt whoever is standing in them, once per tick, at a rate.
+func _tick_hazards(delta: float) -> void:
+	for hazard in hazards:
+		hazard.tick(delta)
+		if not hazard.active:
+			continue
+		for f in fighters:
+			if not f.alive() or f.team == hazard.owner_team:
+				continue
+			if not hazard.covers(f.position, f.radius):
+				continue
+			# Direction is away from the centre, so the knockback and the hit
+			# effect shove a victim OUT of the patch rather than in a direction
+			# that has nothing to do with why they are being hurt.
+			var away := f.position - hazard.position
+			var dir := away.normalized() if away.length_squared() > 0.01 else Vector2.UP
+			apply_damage(
+				f, hazard.damage_per_second * delta, dir, hazard.owner_team, hazard.owner_id
+			)
+
+
 ## One trigger pull, however many pellets the class fires.
 ##
 ## The fan is DETERMINISTIC: fixed angles across the arc, so point blank all
@@ -243,7 +344,8 @@ func _launch_fan(shooter: Fighter, origin: Vector2, dir: Vector2) -> void:
 			gun.speed(),
 			gun.damage(),
 			gun.lifetime(),
-			shooter.team
+			shooter.team,
+			shooter.get_instance_id()
 		)
 
 
@@ -328,7 +430,13 @@ func _tick_bullets(delta: float) -> void:
 			if f.team == bullet.owner_team:
 				continue
 			if bullet.hits_circle(f.position, f.radius):
-				apply_damage(f, bullet.damage, bullet.velocity.normalized(), bullet.owner_team)
+				apply_damage(
+					f,
+					bullet.damage,
+					bullet.velocity.normalized(),
+					bullet.owner_team,
+					bullet.owner_id
+				)
 				bullet.deactivate()
 				break
 
@@ -347,11 +455,26 @@ func _tick_bullets(delta: float) -> void:
 ## which is what any future hazard or fall damage would be. A kill only ever
 ## scores for a team that actually earned it.
 func apply_damage(
-	target: Fighter, amount: float, direction: Vector2, attacker_team: int = -1
+	target: Fighter,
+	amount: float,
+	direction: Vector2,
+	attacker_team: int = -1,
+	attacker_id: int = 0
 ) -> void:
 	var applied := target.take_damage(amount)
 	if applied <= 0.0:
 		return
+
+	# Charge is paid HERE because this is the single funnel every damage path
+	# already goes through — bullets, caltrops, and whatever comes next. Paying
+	# it at each call site instead would mean a future damage source that
+	# silently earns nothing, and nobody would notice for a milestone.
+	#
+	# Never for friendly fire, and never for hurting yourself: an ability you can
+	# charge by shooting your own team is not an ability, it is a chore.
+	var attacker := instance_from_id(attacker_id) as Fighter if attacker_id != 0 else null
+	if attacker != null and attacker != target and attacker.team != target.team:
+		attacker.add_charge(applied)
 
 	target.apply_knockback(direction, Tuning.get_value("knockback_force"))
 	hit.emit(target.position, direction, applied)
