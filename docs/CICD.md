@@ -283,9 +283,11 @@ the map, the site returns 200.
   against 38.5 MB, identical once compressed. The tech-debt entry proposing a
   release export to shrink the download rested on a number nobody had checked;
   it would also have deleted the DBG panel from the web channel, which gates on
-  `OS.is_debug_build()`. Whether the 10 MB or the 38 MB figure is what a phone
-  actually downloads depends on whether Pages compresses `application/wasm`, and
-  the publish job now prints the response headers on every run rather than
-  leaving that unknown.
+  `OS.is_debug_build()`. **Confirmed on the wire** (run #62, PR #23): Pages
+  answers `content-encoding: gzip`, `content-length: 10225015`. So a phone
+  downloads **10.2 MB**, not 36, and the debt row overstated its own cost by
+  3.7x while proposing a change that would have made the artifact slightly
+  worse. The publish job prints those headers on every run, so the figure
+  cannot drift back into folklore.
 - **`dl.google.com` is blocked from the development container**, so there is no
   local Android SDK. Android export is CI-only and cannot be reproduced locally.
