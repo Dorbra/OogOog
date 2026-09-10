@@ -116,7 +116,11 @@ func _physics_process(delta: float) -> void:
 	# signal relayed through a one-tick pending flag, which meant a per-rendered-
 	# frame event driving a fixed 60 Hz simulation — two clocks that agreed only
 	# by accident. Firing is a state now, so the state is what gets read.
-	_cmd.fire = controls.is_firing
+	# take_fire() CONSUMES the edge, so one release is one bullet however many
+	# rendered frames pass before the next simulation tick.
+	var shot: Array = controls.take_fire()
+	_cmd.fire = shot[0]
+	_cmd.snap = shot[1]
 	# take_ability() CONSUMES the edge, so one tap is one ability however many
 	# rendered frames pass before the next simulation tick. Reading a boolean
 	# without clearing it would fire on every tick the thumb stayed down.

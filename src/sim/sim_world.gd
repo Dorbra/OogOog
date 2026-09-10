@@ -210,6 +210,18 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 	var dir := cmd.aim
 	if dir == Vector2.ZERO:
 		dir = shooter.facing
+	# A tap aims itself COMPLETELY, at the intercept rather than at where the
+	# target stands. assisted_aim() below is a 4-degree nudge that closes a near
+	# miss; this is the whole shot handed over, and it is the difference between
+	# a five-year-old hitting things and not (ADR-0013).
+	#
+	# It is only reachable from a press-and-release that never carried a
+	# direction, and one release is one bullet — so unlike the tap that existed
+	# under automatic fire, it cannot be used to spray.
+	if cmd.snap:
+		var locked := snap_target(shooter)
+		if locked != null:
+			dir = _intercept(shooter, locked)
 	dir = assisted_aim(shooter, dir)
 
 	var origin := shooter.position + dir * shooter.radius
@@ -347,6 +359,16 @@ func _launch_fan(shooter: Fighter, origin: Vector2, dir: Vector2) -> void:
 			shooter.team,
 			shooter.get_instance_id()
 		)
+
+
+## Who a tap shot locks onto: the nearest enemy this shooter can actually see,
+## inside auto-aim range.
+##
+## Public so the view can draw the lock before the thumb comes up — a tap that
+## silently picks a target the player did not expect is the preview lying again
+## (ADR-0019), and here the player has a whole hold in which to notice.
+func snap_target(shooter: Fighter) -> Fighter:
+	return nearest_visible_enemy(shooter.position, Tuning.get_value("autoaim_radius"), shooter)
 
 
 ## A narrow magnetic nudge on aimed shots, toward the INTERCEPT rather than

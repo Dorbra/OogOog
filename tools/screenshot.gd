@@ -234,11 +234,16 @@ func _drive_combat(main: Node) -> void:
 	# Point the cat at the target and keep a finger down, so the aim preview and
 	# the muzzle are both visible in the capture.
 	controls.aim_vector = to_target
-	controls.is_firing = true
+	controls.is_aiming = true
 	world.player.facing = to_target
 
-	# The gun is automatic, so holding is all there is: is_firing above keeps it
-	# shooting and the capture lands with bullets in flight AND recent impacts.
+	# Holding aims; letting go shoots. The capture needs a stream of shots to be
+	# sure of landing on an impact, so it arms the release edge every frame and
+	# lets Gun.consume()'s cooldown pace them — which is exactly how a bot fires.
+	# is_aiming stays true alongside it so the bright line of fire and the muzzle
+	# are both in frame.
+	controls.set("_fire_pressed", true)
+	controls.set("_fire_was_tap", false)
 
 
 func _save(out: String) -> void:

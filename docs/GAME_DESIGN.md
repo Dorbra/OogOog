@@ -76,11 +76,14 @@ tension between a slow precise full draw and an instant weak snap shot. Both
 halves went with the bow and with automatic fire, and for four milestones
 nothing replaced them — there was no shooting decision beyond where to point.
 
-**Classes are the replacement, and the axis moved from time to distance.** The
-draw asked "how long will you commit before firing"; a class asks "where are you
-willing to stand". A Skirmisher inside 74 px does 50 damage a shot and 17
-outside it, so closing is the whole game for one class and refusing to let it
-close is the whole game for the other.
+**Two things replaced them, on two different axes.** A class asks *where are
+you willing to stand* — a Skirmisher inside 74 px does 94 damage a shot and 31
+outside it, so closing is the whole game for one and refusing to let it close is
+the whole game for the other. And the trigger asks *when do you let go*: holding
+lines the shot up and costs nothing, releasing spends one of only three rounds
+at a quarter of somebody's life ([ADR-0031](decisions/0031-release-is-the-shot.md)).
+
+Between them the draw curve's job is done, by better means than a hold timer.
 
 What survives is the audience rule underneath it: a five-year-old must be able
 to hit things. Auto-aim is a narrow leading nudge that costs nothing, never a
@@ -117,23 +120,32 @@ projectile slow enough that a target drifted 1.14 cat-widths during its flight:
 So the draw curve is **deleted, not turned down**
 ([ADR-0022](decisions/0022-guns-supersede-archers.md)).
 
-### Automatic: hold to fire
+### Hold to aim, release to shoot
 
-- **Hold** anywhere on the right half and the cat fires, continuously, along
-  your aim. **Let go** and it stops. That is the entire trigger.
-- **Drag while holding** to steer the fire. A drag under `aim_min_drag` (26 px)
-  is treated as thumb noise and leaves the aim where it was.
-- The rate limit lives in `Gun.consume()`, so the player and the bots are gated
-  by the same code — holding cannot beat the gun.
-- **There is no tap shot.** A quick press-and-release used to fire one
-  auto-aimed round at the nearest enemy; it is gone, so every bullet now comes
-  out of the same automatic path.
+- **Hold** anywhere on the right half and you are *aiming*: the line of fire
+  brightens and nothing leaves the barrel. Holding costs nothing and you can
+  hold as long as you like.
+- **Let go** and the cat fires **one** bullet. That is the entire trigger.
+- **Drag while holding** to steer it. A drag under `aim_min_drag` (26 px) is
+  thumb noise and leaves the aim where it was.
+- **A tap is the auto-aimed shot.** A press-and-release that never carried a
+  direction hands the whole shot to the game, which leads the nearest visible
+  enemy for you. It is the shot a five-year-old can land, and with one bullet
+  per release it can no longer be used to spray ([ADR-0013](decisions/0013-audience-is-a-family.md)).
+- `Gun.consume()`'s interval is now a **floor**, not a cadence — it only stops a
+  frantic tapper from turning this back into spam. Your thumb sets the rhythm.
 
-**Firing is a state, not an event.** There is no shot signal: `TouchControls`
-exposes `is_firing`, and `SimWorld` reads it as `cmd.fire` once per simulation
-tick. The previous model relayed a per-rendered-frame signal into a fixed 60 Hz
-simulation through a one-tick pending flag — two clocks that agreed only by
-accident ([ADR-0026](decisions/0026-firing-is-a-state.md)).
+**The gun was automatic for two milestones and is not any more**
+([ADR-0031](decisions/0031-release-is-the-shot.md)). Hold-to-fire made bullets
+cheap: the winning move was to hold the trigger and sweep, and aim stopped being
+the thing that decided a fight.
+
+> *"no longer spamming shots but aiming and hitting is the key for winning"*
+
+**Frame rate still cannot change the shot count.** That was ADR-0026's real
+lesson and it survives the reversal: `TouchControls` records the release as an
+EDGE and `SimWorld` consumes it at the tick boundary via `take_fire()`, so one
+release is one bullet at 50 fps and at 120.
 
 **The aim outlives the shot.** Once you have aimed, walking never turns you
 again: the cat holds the direction you last fired or pointed, and the dotted line
@@ -156,16 +168,15 @@ their spawns at the start of a round.
 | Bullet speed | 1400 px/s |
 | Reach (speed × lifetime) | 231 px — inside the 248 px half-view |
 | Flight to maximum range | 165 ms |
-| Damage | 40 — **5 hits to a kill, 0.90 s of perfect fire** |
+| Damage | 65 — **3.1 hits to a kill** |
 | Deviation | none |
-| Fire interval | 0.18 s → 5.6 shots/s in a burst |
-| Magazine / reload | 5 rounds (0.9 s of continuous fire), one back every 0.55 s |
-| Classes | Ranger (the numbers above) and Skirmisher (3 pellets, 46° fan, 0.42× damage, 0.62× range, 0.8× interval, 1.18× walk, 1.55× health) |
+| Fire interval | 0.5 s — a FLOOR between releases, not a cadence |
+| Magazine / reload | 3 rounds, one back every 0.9 s |
+| Classes | Ranger (the numbers above) and Skirmisher (3 pellets, 46° fan, 0.48× damage, 0.62× range, 0.8× interval, 1.18× walk, 1.2× health) |
 | Abilities | Charged by damage dealt, 400 hp a bar. Ranger dashes; Skirmisher drops caltrops |
 | Required lead | 6.1°, against a cat subtending 7.2° |
 
-Measured over 24 seeded matches: **40.5 kills, a cat lives ~17 s, ~7 deaths
-each** — 3.2× the lethality of the first gun tuning, chosen deliberately after
+Measured over 24 seeded matches: **~37 kills, first blood at 6.1 s** — 3.2× the lethality of the first gun tuning, chosen deliberately after
 being shown that number ([ADR-0025](decisions/0025-a-rate-is-not-a-count.md)).
 `match_target_kills` is 35 so the clock decides 24 matches in 24.
 
@@ -190,10 +201,12 @@ was *"the bots just shot at me from out-of-screen"*, and measurement agreed —
 79% of the enemies in range to hit the player were off screen. It is now 0%, and
 a test fails if that changes.
 
-**Time to kill: 200 hp ÷ 40 = 5 hits**, which is 0.90 s of perfect fire. It has
-been as low as 3.3 hits — the "dead in a second" of the first 3v3 playtest — and
-as high as 7. Five is where the person playing it stopped complaining, and it is
-two sliders (`bullet_damage`, `fighter_health`) if that changes.
+**Time to kill: 200 hp ÷ 65 = about 3 hits.** It has been as low as 3.3 and as
+high as 7 while the gun was automatic, where the question was how long you had
+to hold a stream on a target. With one deliberate bullet per release the
+question changed: three hits means every shot is a quarter of somebody's life,
+and missing one is the punishment ([ADR-0031](decisions/0031-release-is-the-shot.md)).
+It is two sliders — `bullet_damage`, `fighter_health` — if that is wrong.
 
 ### The camera: steady, and framed like the reference game
 

@@ -305,3 +305,80 @@ func test_no_visible_target_means_no_assist() -> void:
 		w.assisted_aim(w.player, mine).is_equal_approx(mine),
 		_fail("with nothing to lock onto, your aim is your own")
 	)
+
+
+## A tap fires a real bullet that leads a running cat, through the real tick loop.
+##
+## The whole point of the tap is that a five-year-old can land it. That is a
+## claim about a bullet arriving, not about a direction being computed — so this
+## drives SimWorld.tick() with `snap` set and waits for the `hit` event, rather
+## than inspecting an angle. An angle assertion passed on the shipped build once
+## before, on a perfectly good unit vector pointing at a cat it could not hit
+## (ADR-0020).
+func test_a_tap_leads_a_running_cat_all_by_itself() -> void:
+	_case = "tap auto-aim"
+	var w := _world()
+	# Well inside auto-aim range, and moving fast enough that pointing straight
+	# at it would miss — otherwise the test passes without leading anything.
+	var target := _stage(w, minf(_reach() * 0.8, Tuning.get_value("autoaim_radius") * 0.9))
+	_runner.check(target != null, _fail("the arena offers a clear runner"))
+	if target == null:
+		return
+
+	_runner.check(w.snap_target(w.player) == target, _fail("the tap locks onto the staged cat"))
+
+	var hit := [false]
+	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float) -> void: hit[0] = true)
+
+	# The cat is deliberately pointed AWAY from the target: a tap carries no
+	# direction, so if the snap does not aim it, the shot leaves in the wrong
+	# direction entirely and nothing is hit.
+	w.player.facing = -(target.position - w.player.position).normalized()
+
+	var run := target.velocity
+	var cmd := InputCommand.new()
+	cmd.fire = true
+	cmd.snap = true
+
+	var ticks := int(Tuning.get_value("bullet_lifetime") * 60.0) + 6
+	for i in ticks:
+		target.velocity = run
+		w.tick(cmd, 1.0 / 60.0)
+		# One release is one bullet: the command only fires on the first tick.
+		cmd.fire = false
+		cmd.snap = false
+		if hit[0]:
+			break
+
+	_runner.check(hit[0], _fail("the tap shot connected without the player aiming it"))
+
+
+## And the mirror: with no target in range a tap is not a magic homing shot.
+func test_a_tap_with_nobody_in_range_just_fires_forward() -> void:
+	_case = "tap with no target"
+	var w := _world()
+	var far := w.arena.bounds().end + Vector2(4000, 4000)
+	for f in w.fighters:
+		if f != w.player:
+			f.position = far
+			f.prev_position = far
+
+	_runner.check(w.snap_target(w.player) == null, _fail("nobody is in auto-aim range"))
+
+	var fired := []
+	w.fired.connect(func(_p: Vector2, d: Vector2) -> void: fired.append(d))
+
+	w.player.facing = Vector2.RIGHT
+	var cmd := InputCommand.new()
+	cmd.fire = true
+	cmd.snap = true
+	w.tick(cmd, 1.0 / 60.0)
+
+	_runner.check(fired.size() == 1, _fail("it still fires (%d shots)" % fired.size()))
+	if fired.is_empty():
+		return
+	# Straight along facing, not deflected toward something off the map.
+	_runner.check(
+		fired[0].dot(Vector2.RIGHT) > 0.99,
+		_fail("and goes where the cat was pointing (%s)" % fired[0])
+	)
