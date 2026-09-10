@@ -126,6 +126,7 @@ func _run(main: Node) -> void:
 	await process_frame
 	_check(chosen.size() > before, "tapping play starts a match")
 
+	_check_setup_layout(screens)
 	await _check_class_picker(main, screens)
 	_check_ability_button(main)
 	_check_override_badge()
@@ -154,6 +155,48 @@ func _run(main: Node) -> void:
 ## Tuning.overridden_keys() proves the DATA is right and proves nothing about
 ## whether anybody can see it — which is the exact gap that shipped an untappable
 ## setup screen (ADR-0019).
+## Everything on the setup screen has to be ON the screen, and not on top of
+## anything else.
+##
+## This is the gate for the failure the first APK playtest hit: the screen was
+## simply not legible as a menu. Two of its causes are geometric and therefore
+## checkable — a row drifting under the device's cutout, and two rows growing
+## into each other as their contents change. The third cause, "these two icons
+## look the same", is not geometry and is answered by looking at the render.
+##
+## The safe area is the specific trap. Every other screen in this project
+## applies it; match_screens.gd did not, and the class row sat at 6% from the
+## top — exactly where a phone puts its cutout.
+func _check_setup_layout(screens: Node) -> void:
+	var usable: Rect2 = screens.call("_usable")
+	_check(usable.size.x > 0.0 and usable.size.y > 0.0, "the setup screen has a usable area")
+
+	var rects: Array[Rect2] = []
+	var names: Array[String] = []
+	for i in int(FighterClass.count()):
+		rects.append(screens.call("_class_rect", i))
+		names.append("class card %d" % i)
+	for i in 3:
+		rects.append(screens.call("_slot_rect", i))
+		names.append("size cat %d" % i)
+	rects.append(screens.call("_play_rect"))
+	names.append("play button")
+
+	for i in rects.size():
+		_check(
+			usable.encloses(rects[i]),
+			"%s is inside the safe area (%s in %s)" % [names[i], rects[i], usable]
+		)
+
+	# Nothing may sit on top of anything else: two overlapping tap targets mean
+	# one of them is unreachable, and which one depends on check order.
+	for i in rects.size():
+		for j in range(i + 1, rects.size()):
+			_check(
+				not rects[i].intersects(rects[j]), "%s does not overlap %s" % [names[i], names[j]]
+			)
+
+
 ## Tapping a class must actually change the gun the player fights with.
 ##
 ## The data half of this is already covered by test_classes.gd. What that cannot

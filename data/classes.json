@@ -32,7 +32,9 @@
     "                        health bar spent before it can shoot back.",
     "",
     "Final: cross match-ups 48% and 50%, against mirror baselines of 47% and",
-    "53%. Within noise of even in both directions."
+    "53%. Within noise of even in both directions.",
+    "",
+    "'label' is the Hebrew name shown on the picker. The game had no text at all until the first APK playtest came back with 'there is no class selection, or am I missing something? all the icons look identical' - the two classes differed only by a small gun silhouette, which reads as decoration at phone size. The icons still have to carry the meaning for a five-year-old who cannot read (ADR-0013); the name is for everyone else."
   ],
   "order": [
     "ranger",
@@ -51,7 +53,8 @@
       "reload": 1.0,
       "speed": 1.0,
       "move": 1.0,
-      "health": 1.0
+      "health": 1.0,
+      "label": "קלע"
     },
     "skirmisher": {
       "icon": 1,
@@ -65,7 +68,8 @@
       "reload": 1.0,
       "speed": 1.08,
       "move": 1.18,
-      "health": 1.55
+      "health": 1.55,
+      "label": "פורץ"
     }
   }
 }
