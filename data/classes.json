@@ -61,14 +61,14 @@
       "ability": "caltrops",
       "pellets": 3,
       "spread_deg": 46.0,
-      "damage": 0.42,
+      "damage": 0.48,
       "fire_interval": 0.8,
       "reach": 0.62,
       "magazine": 0.6,
       "reload": 1.0,
       "speed": 1.08,
       "move": 1.18,
-      "health": 1.55,
+      "health": 1.2,
       "label": "פורץ"
     }
   }

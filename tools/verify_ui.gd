@@ -268,7 +268,7 @@ func _check_ability_button(main: Node) -> void:
 	_check(controls.call("take_ability"), "pressing it raises the ability edge")
 	_check(not controls.call("take_ability"), "and the edge is consumed, so one tap is one ability")
 	_check(controls.get("aim_vector") == aim_before, "and pressing it does not steer the aim")
-	_check(not controls.get("is_firing"), "and does not start firing")
+	_check(not controls.get("is_aiming"), "and does not start aiming")
 	controls.call("_release_finger", 7)
 
 

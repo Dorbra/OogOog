@@ -129,7 +129,7 @@
     "group": "Gun",
     "max": 150.0,
     "min": 5.0,
-    "value": 40.0
+    "value": 65.0
   },
   "bullet_length": {
     "group": "Gun",
@@ -213,7 +213,7 @@
     "group": "Gun",
     "max": 1.5,
     "min": 0.05,
-    "value": 0.18
+    "value": 0.5
   },
   "gun_size": {
     "group": "Art",
@@ -255,7 +255,7 @@
     "group": "Gun",
     "max": 12.0,
     "min": 1.0,
-    "value": 5.0
+    "value": 3.0
   },
   "match_countdown": {
     "group": "Match",
@@ -327,7 +327,7 @@
     "group": "Gun",
     "max": 5.0,
     "min": 0.1,
-    "value": 0.55
+    "value": 0.9
   },
   "respawn_time": {
     "group": "Regen",

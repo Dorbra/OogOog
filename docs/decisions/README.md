@@ -49,3 +49,4 @@ adapted: **Context → Decision → Consequences → Alternatives**.
 | [0027](0027-measure-a-debt-before-paying-it.md) | Measure a debt before paying it — an adjective is not a number | Accepted |
 | [0028](0028-a-class-is-a-multiplier.md) | A class is a multiplier, not a stat block | Accepted |
 | [0029](0029-abilities-charge-from-damage-dealt.md) | Abilities charge from damage dealt, not from a clock | Accepted |
+| [0031](0031-release-is-the-shot.md) | Hold to aim, release to shoot — and each bullet counts | Accepted, supersedes the automatic fire in 0026 |

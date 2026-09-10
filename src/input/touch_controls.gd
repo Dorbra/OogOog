@@ -32,10 +32,31 @@ const UNASSIGNED := -1
 var move_vector: Vector2 = Vector2.ZERO
 var aim_vector: Vector2 = Vector2.ZERO
 
-## True while a right-hand finger is down, which now means BOTH aiming and
-## firing — they stopped being separate the moment the gun went automatic.
-## SimWorld reads it as `cmd.fire`; the view reads it to brighten the aim line.
-var is_firing: bool = false
+## True while a right-hand thumb is down: you are AIMING, and not yet shooting.
+##
+## The gun is no longer automatic. Holding lines up the shot and holding costs
+## nothing; letting go is what fires it:
+##
+##     "keep the right stick clicked in order to aim and be ready, and when you
+##      want to shoot you just release... no longer spamming shots but aiming
+##      and hitting is the key for winning"
+##
+## The view reads this to brighten the line of fire, so a held thumb is visibly
+## a loaded shot rather than a stream of them.
+var is_aiming: bool = false
+
+## True for exactly ONE tick after the aiming thumb is lifted.
+##
+## An EDGE, consumed by take_fire(), for the reason ADR-0026 was written about:
+## the input layer runs on rendered frames and the simulation on a fixed 60 Hz
+## clock, so anything that survives more than one read fires a number of times
+## that depends on the frame rate. Consuming it at the tick boundary means one
+## release is one bullet on a 50 fps phone and on a 120 fps one.
+var _fire_pressed: bool = false
+
+## True when the release that armed `_fire_pressed` was a TAP rather than a
+## drag — the shot that aims itself, and the one a five-year-old can land.
+var _fire_was_tap: bool = false
 
 ## True for exactly ONE tick after the ability button is tapped.
 ##
@@ -110,6 +131,18 @@ func ability_rect() -> Rect2:
 	)
 
 
+## Reads and clears the one-tick fire edge, and says whether it was a tap.
+##
+## Returns (fired, was_tap). Both are consumed together on purpose: a caller
+## that read one without the other could fire this release and auto-aim the
+## next one.
+func take_fire() -> Array:
+	var out := [_fire_pressed, _fire_was_tap]
+	_fire_pressed = false
+	_fire_was_tap = false
+	return out
+
+
 ## Reads and clears the one-tick ability edge.
 func take_ability() -> bool:
 	var pressed := _ability_pressed
@@ -136,7 +169,7 @@ func _assign_finger(index: int, position: Vector2) -> void:
 		_aim_finger = index
 		_aim_origin = position
 		_aim_current = position
-		is_firing = true
+		is_aiming = true
 
 
 func _release_finger(index: int) -> void:
@@ -147,8 +180,19 @@ func _release_finger(index: int) -> void:
 		_move_finger = UNASSIGNED
 		move_vector = Vector2.ZERO
 	elif index == _aim_finger:
+		# LETTING GO IS THE SHOT. Everything before this was aiming.
+		#
+		# A drag shorter than aim_min_drag never moved the aim — _update_aim()
+		# treats it as thumb noise — so it is a TAP, and a tap is the auto-aimed
+		# shot. Using the same threshold for both is what stops the dead band
+		# that ADR-0024 was written about: there is one number deciding "did this
+		# gesture carry a direction", not two that can disagree.
+		var drag := _aim_current - _aim_origin
+		_fire_was_tap = drag.length() < Tuning.get_value("aim_min_drag")
+		_fire_pressed = true
+
 		_aim_finger = UNASSIGNED
-		is_firing = false
+		is_aiming = false
 		# aim_vector DELIBERATELY SURVIVES.
 		#
 		# It used to be zeroed here, and Fighter.tick() falls through to the

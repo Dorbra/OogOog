@@ -168,20 +168,84 @@ func test_bullet_deactivates_outside_bounds() -> void:
 # --------------------------------------------------------- automatic fire
 
 
-## Holding the thumb fires; letting go stops. That is the whole trigger.
+## HOLDING AIMS. LETTING GO SHOOTS. That is the whole trigger.
 ##
-## Firing stopped being an EVENT here and became a STATE — there is no
-## shot_fired signal any more, and SimWorld reads `is_firing` off the controls
-## once per simulation tick. So this asserts the state, not a count of emissions.
-func test_holding_fires_and_releasing_stops() -> void:
+##     "keep the right stick clicked in order to aim and be ready, and when you
+##      want to shoot you just release"
+##
+## Asserted in both directions, because each half fails silently on its own: a
+## thumb that fires on the way DOWN turns every aim into an accidental shot, and
+## a release that fires nothing makes the gun look broken.
+func test_holding_aims_and_releasing_shoots() -> void:
 	var controls := TouchControls.new()
-	_runner.check(not controls.is_firing, _fail("a fresh gun is not firing"))
+	_runner.check(not controls.is_aiming, _fail("a fresh gun is not aiming"))
+	_runner.check(not controls.take_fire()[0], _fail("and has not fired"))
 
 	controls._assign_finger(0, Vector2(900, 300))
-	_runner.check(controls.is_firing, _fail("a thumb down means firing"))
+	_runner.check(controls.is_aiming, _fail("a thumb down means aiming"))
+	_runner.check(not controls.take_fire()[0], _fail("and pressing fires NOTHING"))
 
 	controls._release_finger(0)
-	_runner.check(not controls.is_firing, _fail("and lifting it stops"))
+	_runner.check(not controls.is_aiming, _fail("lifting it stops the aim"))
+	_runner.check(controls.take_fire()[0], _fail("and lifting it IS the shot"))
+
+
+## One release is one bullet, whatever the frame rate.
+##
+## The edge is consumed rather than cleared on the next release, which is the
+## whole reason this survives a slow frame. ADR-0026 was written because a
+## per-rendered-frame signal driving a fixed 60 Hz simulation fires a number of
+## times that depends on the frame rate; reading and clearing at the tick
+## boundary is what makes that impossible rather than unlikely.
+func test_a_release_is_exactly_one_bullet() -> void:
+	var controls := TouchControls.new()
+	controls._assign_finger(0, Vector2(900, 300))
+	controls._release_finger(0)
+
+	_runner.check(controls.take_fire()[0], _fail("the release fired"))
+	# Every read after the first must come back empty, however many ticks pass
+	# before the thumb comes down again.
+	for i in 5:
+		_runner.check(not controls.take_fire()[0], _fail("and read %d fires nothing more" % i))
+
+	# Holding without ever letting go must never produce a shot, which is what
+	# "no more spamming" means mechanically.
+	controls._assign_finger(1, Vector2(950, 320))
+	for i in 30:
+		_runner.check(
+			not controls.take_fire()[0], _fail("a held thumb fires nothing (tick %d)" % i)
+		)
+
+
+## A tap carries no direction, so it asks the game to aim.
+##
+## The threshold is aim_min_drag, the SAME number that decides whether a drag
+## moved the aim at all. One number, so the two answers cannot disagree — the
+## dead band between two thresholds is what ADR-0024 was written about.
+func test_a_tap_asks_for_auto_aim_and_a_drag_does_not() -> void:
+	var min_drag := Tuning.get_value("aim_min_drag")
+
+	var tap := TouchControls.new()
+	tap._assign_finger(0, Vector2(900, 300))
+	tap._release_finger(0)
+	var tapped: Array = tap.take_fire()
+	_runner.check(tapped[0], _fail("the tap fired"))
+	_runner.check(tapped[1], _fail("and asked for auto-aim"))
+
+	var drag := TouchControls.new()
+	drag._assign_finger(0, Vector2(900, 300))
+	drag._handle_drag(_drag_event(0, Vector2(900 + min_drag * 2.0, 300)))
+	drag._release_finger(0)
+	var dragged: Array = drag.take_fire()
+	_runner.check(dragged[0], _fail("the drag fired too"))
+	_runner.check(not dragged[1], _fail("but aimed itself, so no auto-aim"))
+
+
+func _drag_event(index: int, at: Vector2) -> InputEventScreenDrag:
+	var event := InputEventScreenDrag.new()
+	event.index = index
+	event.position = at
+	return event
 
 
 ## Firing is fed to the simulation as a plain flag, and the gun's cooldown is
