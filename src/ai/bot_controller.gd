@@ -448,33 +448,96 @@ func _enemy_spawns(me: Fighter, world: SimWorld) -> Array[Vector2]:
 
 ## Nearest open cell from which `threat` cannot be seen. Vector2.INF when the
 ## whole neighbourhood is exposed, which on an open map is the honest answer.
+##
+## MEASURED AT 478 us A CALL, against a mean simulation tick of 226 us — and
+## _do_retreat() calls it EVERY TICK a bot is retreating, with no cache and no
+## timer. Ticks with somebody retreating cost 536 us against 226 us for the
+## rest: this one function was 2.4x the cost of a frame's simulation, on 30% of
+## the frames in a match. ARCHITECTURE.md called it "negligible on 24x14", which
+## is what an unmeasured adjective is worth (ADR-0027).
+##
+## The cost was never the grid walk, it was the raycast per cell. The rewrite
+## below changes only the ORDER cells are visited, and that is safe precisely
+## because the answer does not depend on order — the loop keeps a running
+## minimum, so any order returns the same cell. Order decides only how early the
+## distance test starts pruning.
+##
+## So it walks outward from the bot in square rings instead of scanning
+## row-major from the arena's top-left corner. Cover is usually a cell or two
+## away, and every ring beyond the one that found it is skipped whole: once the
+## best distance beats the closest any further ring could possibly be, there is
+## nothing left to check.
+##
+## The row-major tie-break is preserved deliberately, and honestly it is the one
+## line here with no evidence behind it: 800 probes across this arena, half of
+## them from exact cell centres where symmetry would bite, never once produced
+## two cover cells at exactly equal distance. Removing it keeps every test green.
+##
+## It stays because it costs two comparisons on the rare accepted cell and it is
+## what makes the equivalence an ARGUMENT rather than an observation — order
+## cannot change the answer, ties included, on this map or the next one. A gate
+## that passes on one hand-authored arena is not a proof about the algorithm,
+## and more arenas are coming.
 func _nearest_cover(arena: Arena, from: Vector2, threat: Vector2) -> Vector2:
 	var best := Vector2.INF
 	var best_dist := INF
-	for y in arena.rows:
-		for x in arena.cols:
-			if arena.is_solid(x, y):
+	var best_index := 0x7FFFFFFF
+
+	var origin := arena.cell_at(from)
+	var max_ring := maxi(
+		maxi(origin.x, arena.cols - 1 - origin.x), maxi(origin.y, arena.rows - 1 - origin.y)
+	)
+
+	for ring in max_ring + 1:
+		# A cell on ring `ring` sits at least (ring - 1) cells away from `from`,
+		# wherever inside its own cell `from` happens to be. Deliberately one
+		# ring slacker than the tight bound: cheap, and it cannot cut the search
+		# short of the true nearest.
+		if ring > 1:
+			var floor_dist := float(ring - 1) * arena.cell_size
+			if best_dist <= floor_dist * floor_dist:
+				break
+
+		for dy in range(-ring, ring + 1):
+			var y := origin.y + dy
+			if y < 0 or y >= arena.rows:
 				continue
-			var centre := arena.cell_centre(x, y)
-			var dist := from.distance_squared_to(centre)
-			if dist >= best_dist:
-				continue
-			if not arena.cast_segment(centre, threat)["hit"]:
-				continue
-			best_dist = dist
-			best = centre
+			# Only the top and bottom rows of a ring are solid runs; the rows
+			# between them contribute just their two end cells.
+			var step := 1 if (ring == 0 or absi(dy) == ring) else ring * 2
+			var dx := -ring
+			while dx <= ring:
+				var x := origin.x + dx
+				dx += step
+				if x < 0 or x >= arena.cols or arena.is_solid(x, y):
+					continue
+
+				var index := y * arena.cols + x
+				var centre := arena.cell_centre(x, y)
+				var dist := from.distance_squared_to(centre)
+				# `>` then the index test, rather than `>=`: an exact tie must
+				# resolve to the row-major-earlier cell, as the old loop did.
+				if dist > best_dist or (dist == best_dist and index >= best_index):
+					continue
+				if not arena.cast_segment(centre, threat)["hit"]:
+					continue
+				best_dist = dist
+				best_index = index
+				best = centre
+
 	return best
 
 
 ## The bush closest to `toward` — somewhere to lie in wait that is on the way to
 ## the fight rather than in a corner of the map nobody walks past.
+## Bushes never move, so the list is built once by the arena and read here.
+## This used to call cells_in_rect(bounds()), which allocates an array of all
+## 108 non-open cells on every call in order to look at the 16 that are bushes —
+## 141 us a call, and the allocation churn ADR-0009 exists about.
 func _nearest_bush(arena: Arena, from: Vector2, toward: Vector2) -> Vector2:
 	var best := Vector2.INF
 	var best_score := INF
-	for cell in arena.cells_in_rect(arena.bounds()):
-		if cell.z != Arena.Cell.BUSH:
-			continue
-		var centre := arena.cell_centre(cell.x, cell.y)
+	for centre in arena.bush_centres():
 		# Weighted toward the anchor, but not blind to distance: a perfect bush
 		# on the far side of the map is worse than a good one underfoot.
 		var score := centre.distance_to(toward) + 0.35 * centre.distance_to(from)

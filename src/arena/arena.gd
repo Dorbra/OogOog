@@ -25,6 +25,19 @@ var cell_size: float = 60.0
 var _cells: PackedInt32Array = PackedInt32Array()
 var _spawns: Array[Vector2] = []
 
+## Built once on first use, because the grid never changes after parsing.
+##
+## The bot AI used to find bushes by calling cells_in_rect(bounds()), which
+## allocates an Array of every non-open cell — 108 of them — on every call, to
+## then look at the 16 that are bushes. Measured at 141 us a call against a mean
+## simulation tick of 226 us. Nothing here can change at runtime, so nothing
+## here needs recomputing (ADR-0027).
+var _bush_centres: Array[Vector2] = []
+var _open_centres: Array[Vector2] = []
+## An arena with no bushes at all would otherwise rebuild an empty list forever,
+## since is_empty() cannot tell "not built yet" from "genuinely none".
+var _cell_lists_built := false
+
 
 func _init(path: String = DEFAULT_PATH) -> void:
 	_load_legend()
@@ -245,6 +258,32 @@ func cast_segment(from: Vector2, to: Vector2) -> Dictionary:
 			return {"hit": true, "point": from + dir * travelled}
 
 	return {"hit": false, "point": to}
+
+
+## Centres of every bush cell. The array is shared, not copied — callers read it
+## and must not mutate it.
+func bush_centres() -> Array[Vector2]:
+	_build_cell_lists()
+	return _bush_centres
+
+
+## Centres of every non-solid cell, in row-major order. Shared, not copied.
+func open_centres() -> Array[Vector2]:
+	_build_cell_lists()
+	return _open_centres
+
+
+func _build_cell_lists() -> void:
+	if _cell_lists_built:
+		return
+	_cell_lists_built = true
+	for y in rows:
+		for x in cols:
+			var c := cell(x, y)
+			if c == Cell.BUSH:
+				_bush_centres.append(cell_centre(x, y))
+			if c != Cell.WALL:
+				_open_centres.append(cell_centre(x, y))
 
 
 ## Cells overlapping a rect, for the view to draw only what is on screen.

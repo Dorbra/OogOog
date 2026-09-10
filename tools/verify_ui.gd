@@ -127,6 +127,7 @@ func _run(main: Node) -> void:
 	_check(chosen.size() > before, "tapping play starts a match")
 
 	_check_override_badge()
+	_check_frame_readout()
 
 	# And the results screen must be dismissable, or a finished round traps you
 	# exactly as the setup screen did.
@@ -191,6 +192,51 @@ func _check_override_badge() -> void:
 	tuning.call("reset")
 	overlay.call("_refresh_override_badge")
 	_check(not badge.visible, "and Reset makes it go away again")
+
+
+## The frame readout has to be ON SCREEN, not merely correct.
+##
+## tests/test_frame_stats.gd proves the counting; it cannot prove anybody can
+## read it. This project has shipped a screen that drew perfectly and could not
+## be tapped, and a tuning override that was applied correctly and invisibly —
+## both times the data was right and the person holding the phone learned
+## nothing (ADR-0019). A performance readout nobody can see is the same bug in a
+## third place, and it matters more here because this readout is the only
+## profiler that exists for the device.
+func _check_frame_readout() -> void:
+	var overlay: Node = root.get_node_or_null("DebugOverlay")
+	if overlay == null:
+		# Already reported by _check_override_badge().
+		return
+
+	var stats: Variant = overlay.get("_frames")
+	_check(stats != null, "the debug overlay tracks frame times")
+	if stats == null:
+		return
+
+	# Past the warm-up, with one deliberately terrible frame in it, so the
+	# readout has something real to say rather than "warming up".
+	for _i in 40:
+		stats.call("record", 0.016)
+	stats.call("record", 0.045)
+
+	overlay.call("_set_open", true)
+	overlay.call("_process", 0.016)
+
+	var label: Variant = overlay.get("_info_label")
+	_check(label != null, "the Info tab has a label")
+	if label == null:
+		return
+
+	var text := String(label.get("text"))
+	_check("worst" in text, "the Info tab shows the worst frame (got %d chars)" % text.length())
+	_check("45.0 ms" in text, "and the worst frame is the 45 ms one, not an average")
+	_check("over 33 ms  1" in text, "and the dropped frame is counted")
+	# The build stamp must still be there: appending the frame lines must not
+	# have replaced what the tab was already for.
+	_check("commit" in text, "and the build stamp is still shown")
+
+	overlay.call("_set_open", false)
 
 
 func _report() -> void:

@@ -22,6 +22,11 @@ var _sliders: Dictionary = {}
 var _override_badge: Label
 var _open := false
 
+## Ticked every frame, read by the Info tab. Owned here rather than by the HUD
+## because it is a developer readout, and it survives a scene change — a match
+## restart must not silently reset the numbers you are in the middle of reading.
+var _frames := FrameStats.new()
+
 
 func _ready() -> void:
 	# Release builds ship without any of this.
@@ -265,6 +270,15 @@ func _build_info_tab() -> Control:
 	copy_button.pressed.connect(func() -> void: DisplayServer.clipboard_set(_info_label.text))
 	box.add_child(copy_button)
 
+	# The measurement that matters is "during a fight", not "since I launched
+	# the game and stood in the setup screen". Without a reset the counts are
+	# dominated by whatever happened before you started paying attention.
+	var reset_button := Button.new()
+	reset_button.text = "Reset frame stats"
+	reset_button.focus_mode = Control.FOCUS_NONE
+	reset_button.pressed.connect(func() -> void: _frames.reset())
+	box.add_child(reset_button)
+
 	return box
 
 
@@ -272,9 +286,14 @@ func _copy_tuning_json() -> void:
 	DisplayServer.clipboard_set(Tuning.to_json())
 
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	# Recorded unconditionally, not only while the panel is open: the frames
+	# worth knowing about are the ones during a fight, and the panel is shut
+	# then. Opening it to look would otherwise reset what you came to measure.
+	_frames.record(delta)
+
 	if _open and _info_label != null:
-		_info_label.text = BuildInfo.describe()
+		_info_label.text = "%s\n\n%s" % [BuildInfo.describe(), _frames.describe()]
 	if _open and _log_label != null and _log_label.text.is_empty():
 		_refresh_log()
 

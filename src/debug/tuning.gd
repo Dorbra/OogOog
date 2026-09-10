@@ -24,6 +24,13 @@ var _defs: Dictionary = {}
 var _values: Dictionary = {}
 var _loaded := false
 
+## Every get_value() since boot. Read by the DBG Info tab and by
+## tools/measure_frame.gd, which divides it by the tick count to get lookups per
+## frame — the number that says whether caching this is worth the risk of a
+## slider silently going dead (ADR-0027). An integer increment against two
+## dictionary operations is not a cost worth hiding behind a debug flag.
+var lookups: int = 0
+
 ## Keys whose value came from user://tuning.json rather than the shipped
 ## defaults. See _load_user_overrides() for why this is worth tracking.
 var _overridden: Array[String] = []
@@ -130,10 +137,16 @@ func reload() -> void:
 
 func get_value(key: String) -> float:
 	_ensure_loaded()
-	if not _values.has(key):
+	lookups += 1
+	# One dictionary operation rather than has() plus [], which halves the work
+	# in the hottest function in the project. NAN is safe as the sentinel: every
+	# stored value comes from float() over parsed JSON and through clampf(), so
+	# a genuine NAN cannot get in.
+	var value: float = _values.get(key, NAN)
+	if is_nan(value):
 		push_error("Tuning: unknown key '%s'" % key)
 		return 0.0
-	return _values[key]
+	return value
 
 
 func set_value(key: String, value: float) -> void:
