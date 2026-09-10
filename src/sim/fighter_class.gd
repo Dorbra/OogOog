@@ -23,6 +23,11 @@ static var _loaded := false
 
 var id: String = "ranger"
 
+## What the picker calls this class, in Hebrew. Data rather than code because a
+## name is content, and because the next class should not need a view file
+## edited to be nameable.
+var label: String = ""
+
 ## Which icon the picker draws. An index rather than a path: a five-year-old
 ## picks by shape, and the shapes are drawn in code, not loaded as art.
 var icon: int = 0
@@ -131,6 +136,7 @@ static func _from_dictionary(class_id: String, entry: Dictionary) -> FighterClas
 	var out := FighterClass.new()
 	out.id = class_id
 	out.icon = int(entry.get("icon", 0))
+	out.label = String(entry.get("label", class_id))
 	out.ability = String(entry.get("ability", ""))
 	# At least one pellet, always. A class that fires nothing is not a class a
 	# five-year-old can diagnose.
@@ -145,6 +151,17 @@ static func _from_dictionary(class_id: String, entry: Dictionary) -> FighterClas
 	out.move_mult = float(entry.get("move", 1.0))
 	out.health_mult = float(entry.get("health", 1.0))
 	return out
+
+
+## Damage of one fully-connecting shot, relative to the baseline class.
+##
+## pellets x damage, NOT damage alone. A Skirmisher pellet does 0.42 of a Ranger
+## round, which makes the class look feeble in a table; three of them landing
+## together do 1.26 of it, which is what the player actually experiences and
+## therefore what the picker has to show. Showing per-pellet damage would be
+## true and misleading at the same time.
+func burst_damage_mult() -> float:
+	return float(pellets) * damage_mult
 
 
 ## The angle offset of pellet `index`, in radians, for a shot of `pellets`.

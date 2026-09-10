@@ -19,16 +19,41 @@ const BODY_PATH := "res://assets/cats/cat_body.svg"
 const FACE_PATH := "res://assets/cats/cat_face.svg"
 
 const MAX_SIZE := 3
-const ICON := 132.0
-const ICON_GAP := 40.0
+
+## Smaller than the class cards, deliberately. These two rows are not equal
+## decisions: which cat you are shapes the whole match, how many a side is a
+## setup detail you pick once. At 132 px the size row was the loudest thing on
+## the screen and the class cards read as a header above it — the importance
+## inverted, which is its own kind of "not clear".
+const ICON := 88.0
+const ICON_GAP := 34.0
 
 ## The class row sits above the team-size row and is drawn with the SAME cat
 ## icon, distinguished only by the gun in its paws. That is deliberate: the gun
 ## silhouette is what tells a class apart mid-fight, so the picker teaches the
 ## exact symbol the game then uses. A different icon here would teach a symbol
 ## that appears nowhere else.
-const CLASS_ICON := 118.0
-const CLASS_GAP := 56.0
+## A class CARD, not an icon. The first APK playtest came back with "there is no
+## class selection, or am I missing something? all the icons look identical" —
+## and it was right. Two copies of the same cat sprite differing by a few pixels
+## of gun silhouette read as decoration, not as a choice, and nothing on the
+## screen said which row meant "who am I" and which meant "how many of us".
+##
+## So a class is now a panel with its own name, its weapon drawn large enough to
+## actually see, three comparable bars and its ability symbol.
+const CARD_W := 340.0
+const CARD_H := 244.0
+const CARD_GAP := 44.0
+
+## Bars, in the order they are drawn. The label is Hebrew because the ten-year-
+## old and the adult both read it; the BAR is what carries the meaning for the
+## five-year-old, who does not (ADR-0013). Text is the addition here, never the
+## foundation.
+const STAT_ROWS := [
+	{"key": "reach", "label": "טווח"},
+	{"key": "damage", "label": "נזק"},
+	{"key": "health", "label": "חיים"},
+]
 
 var _state: MatchState
 var _body: Texture2D
@@ -136,28 +161,42 @@ func _gui_input(event: InputEvent) -> void:
 
 
 func _slot_rect(index: int) -> Rect2:
-	var view := get_viewport_rect().size
+	var area := _usable()
 	var span := MAX_SIZE * ICON + (MAX_SIZE - 1) * ICON_GAP
-	var left := view.x * 0.5 - span * 0.5
+	var left := area.position.x + area.size.x * 0.5 - span * 0.5
+	var top := _class_rect(0).end.y + 62.0
+	return Rect2(Vector2(left + float(index) * (ICON + ICON_GAP), top), Vector2(ICON, ICON))
+
+
+## The area the setup screen may draw in.
+##
+## SAFE AREA, which this file did not use at all. Every other screen in the
+## project does — the Pixel 9's cutout and gesture bar eat exactly the edges the
+## class row was sitting against, at 6% from the top. It had not clipped the row
+## yet, but it was a matter of which phone.
+func _usable() -> Rect2:
+	var view := get_viewport_rect().size
+	var inset := SafeArea.margins(view)
 	return Rect2(
-		Vector2(left + float(index) * (ICON + ICON_GAP), view.y * 0.34), Vector2(ICON, ICON)
+		Vector2(inset.x, inset.y), Vector2(view.x - inset.x - inset.z, view.y - inset.y - inset.w)
 	)
 
 
 func _class_rect(index: int) -> Rect2:
-	var view := get_viewport_rect().size
+	var area := _usable()
 	var count := maxi(FighterClass.count(), 1)
-	var span := float(count) * CLASS_ICON + float(count - 1) * CLASS_GAP
-	var left := view.x * 0.5 - span * 0.5
+	var span := float(count) * CARD_W + float(count - 1) * CARD_GAP
+	var left := area.position.x + area.size.x * 0.5 - span * 0.5
 	return Rect2(
-		Vector2(left + float(index) * (CLASS_ICON + CLASS_GAP), view.y * 0.06),
-		Vector2(CLASS_ICON, CLASS_ICON)
+		Vector2(left + float(index) * (CARD_W + CARD_GAP), area.position.y + area.size.y * 0.09),
+		Vector2(CARD_W, CARD_H)
 	)
 
 
 func _play_rect() -> Rect2:
-	var view := get_viewport_rect().size
-	return Rect2(Vector2(view.x * 0.5 - 90.0, view.y * 0.66), Vector2(180.0, 110.0))
+	var area := _usable()
+	var top := _slot_rect(0).end.y + 26.0
+	return Rect2(Vector2(area.position.x + area.size.x * 0.5 - 90.0, top), Vector2(180.0, 92.0))
 
 
 # -------------------------------------------------------------------- drawing
@@ -204,6 +243,8 @@ func _draw_cat(rect: Rect2, tint: Color, alpha: float) -> void:
 func _draw_setup() -> void:
 	_draw_class_row()
 
+	_draw_heading("כמה בכל קבוצה", _slot_rect(0).position.y - 28.0)
+
 	var chosen := clampi(int(Tuning.get_value("bot_team_size")), 1, MAX_SIZE)
 	for i in MAX_SIZE:
 		var rect := _slot_rect(i)
@@ -226,42 +267,156 @@ func _draw_setup() -> void:
 	)
 
 
-## One cat per class, each holding its own gun, the picked one lit.
+## Two class cards, the picked one lit and ringed.
 func _draw_class_row() -> void:
 	var picked := clampi(int(Tuning.get_value("player_class")), 0, FighterClass.count() - 1)
+	_draw_heading("בחרו דמות", _class_rect(0).position.y - 30.0)
 	for i in FighterClass.count():
-		var rect := _class_rect(i)
-		var lit := i == picked
-		# 0.45 rather than the team row's 0.2. Those two rows are asking
-		# different questions: an unlit cat there means "not this many", and
-		# reads correctly as absent. An unlit class here is still an OPTION, and
-		# at 0.25 against the dimmed arena it read as a shadow rather than as
-		# something to tap — which for a non-reader is the whole instruction.
-		var alpha := 1.0 if lit else 0.45
-		_draw_cat(rect, Palette.CAT_PLAYER, alpha)
-		_draw_class_gun(FighterClass.at(i), rect, alpha)
-		if lit:
-			draw_arc(
-				rect.get_center() + Vector2(0, 4),
-				CLASS_ICON * 0.52,
-				0.0,
-				TAU,
-				40,
-				Palette.ARROW,
-				5.0
-			)
+		_draw_class_card(FighterClass.at(i), _class_rect(i), i == picked)
 
 
-## The same silhouette CatView draws in the fight, at rest pointing right.
+## A heading, centred, in the same warm colour as everything else selectable.
 ##
-## Deliberately NOT shared code with CatView. That one is a Node2D drawing in
-## world space around a cat's own origin; this fills a rect on a CanvasLayer.
-## Sharing them would mean a coordinate-space adapter for the sake of a dozen
-## lines, and the thing that actually has to match is the PROPORTIONS — long and
-## thin against short and wide — which is what a player learns to read.
+## Text at all is new to this game. It exists because the first playtest could
+## not tell what the screen was asking — "the first window is not clear at all".
+## Two rows of cats with nothing to say which was which is a puzzle, not a menu.
+func _draw_heading(text: String, y: float) -> void:
+	var area := _usable()
+	var font := ThemeDB.fallback_font
+	var size := 26
+	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	var at := Vector2(area.position.x + area.size.x * 0.5 - width * 0.5, y)
+	draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, 6, Color(0, 0, 0, 0.8))
+	draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(1, 1, 1, 0.82))
+
+
+func _draw_class_card(cls: FighterClass, rect: Rect2, lit: bool) -> void:
+	var alpha := 1.0 if lit else 0.5
+
+	# A panel behind each class, which is most of what makes this read as a
+	# CHOICE rather than as scenery. Two loose cats on a background do not.
+	var fill := Color(0.10, 0.16, 0.11, 0.92 if lit else 0.55)
+	draw_rect(rect, fill, true)
+	draw_rect(
+		rect,
+		Color(Palette.ARROW.r, Palette.ARROW.g, Palette.ARROW.b, 0.9 if lit else 0.25),
+		false,
+		4.0
+	)
+
+	# The cat, left, at a size where its weapon is legible.
+	var cat := Rect2(rect.position + Vector2(16.0, 14.0), Vector2(104.0, 104.0))
+	_draw_cat(cat, Palette.CAT_PLAYER, alpha)
+	_draw_class_gun(cls, cat, alpha)
+
+	# The name, right of the cat, on its own line.
+	var font := ThemeDB.fallback_font
+	var name_at := Vector2(rect.position.x + 138.0, rect.position.y + 62.0)
+	var name_colour := Palette.ARROW if lit else Color(1, 1, 1, 0.55)
+	draw_string_outline(
+		font, name_at, cls.label, HORIZONTAL_ALIGNMENT_LEFT, -1, 34, 7, Color(0, 0, 0, 0.85)
+	)
+	draw_string(font, name_at, cls.label, HORIZONTAL_ALIGNMENT_LEFT, -1, 34, name_colour)
+
+	_draw_ability_glyph(cls, Vector2(rect.end.x - 46.0, rect.position.y + 44.0), alpha)
+	_draw_stat_bars(cls, rect, alpha)
+
+
+## Three bars per class, each scaled against the BEST class on that row.
+##
+## Comparable by construction: a full bar means "the most of this in the game",
+## so two cards side by side can be read against each other without any numbers.
+## That is what makes this work for somebody who cannot read the labels.
+func _draw_stat_bars(cls: FighterClass, rect: Rect2, alpha: float) -> void:
+	var font := ThemeDB.fallback_font
+	var bar_w := rect.size.x - 132.0
+	var x := rect.position.x + 118.0
+	var y := rect.position.y + 128.0
+
+	for row: Dictionary in STAT_ROWS:
+		var key: String = row["key"]
+		var value := _stat_of(cls, key)
+		var best := 0.0
+		for other_id in FighterClass.all():
+			best = maxf(best, _stat_of(FighterClass.get_class_by_id(other_id), key))
+		var fraction: float = clampf(value / maxf(best, 0.001), 0.0, 1.0)
+
+		var label: String = row["label"]
+		var label_w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, 18).x
+		draw_string(
+			font,
+			Vector2(rect.position.x + 110.0 - label_w, y + 13.0),
+			label,
+			HORIZONTAL_ALIGNMENT_LEFT,
+			-1,
+			18,
+			Color(1, 1, 1, 0.6 * alpha)
+		)
+
+		var track := Rect2(Vector2(x, y), Vector2(bar_w, 14.0))
+		draw_rect(track, Color(0, 0, 0, 0.45 * alpha), true)
+		draw_rect(
+			Rect2(track.position, Vector2(bar_w * fraction, track.size.y)),
+			Color(Palette.ARROW.r, Palette.ARROW.g, Palette.ARROW.b, 0.9 * alpha),
+			true
+		)
+		y += 26.0
+
+
+func _stat_of(cls: FighterClass, key: String) -> float:
+	match key:
+		"reach":
+			return cls.reach_mult
+		"damage":
+			return cls.burst_damage_mult()
+		"health":
+			return cls.health_mult
+		_:
+			return 0.0
+
+
+## The ability, as a shape rather than a word.
+##
+## A dash is a pair of chevrons pointing the way you go; caltrops are a ring of
+## spikes. Neither needs reading, and both are the same shapes the ability draws
+## in the fight, so the card teaches what the game then shows.
+func _draw_ability_glyph(cls: FighterClass, centre: Vector2, alpha: float) -> void:
+	var tint := Palette.ARROW_TIP
+	tint.a = alpha
+	match cls.ability:
+		"dash":
+			for i in 2:
+				var ox := -10.0 + float(i) * 14.0
+				draw_colored_polygon(
+					PackedVector2Array(
+						[
+							centre + Vector2(ox - 6.0, -14.0),
+							centre + Vector2(ox + 8.0, 0.0),
+							centre + Vector2(ox - 6.0, 14.0),
+							centre + Vector2(ox - 1.0, 0.0),
+						]
+					),
+					tint
+				)
+		"caltrops":
+			draw_arc(centre, 17.0, 0.0, TAU, 28, Color(tint.r, tint.g, tint.b, 0.45 * alpha), 2.5)
+			for i in 6:
+				var angle := TAU * float(i) / 6.0
+				draw_circle(centre + Vector2(cos(angle), sin(angle)) * 10.0, 3.6, tint)
+		_:
+			pass
+
+
+## The same silhouette CatView draws in the fight, drawn LARGE.
+##
+## Deliberately not shared code with CatView: that one is a Node2D drawing in
+## world space around a cat's own origin, this fills a rect on a CanvasLayer.
+## What has to match is the PROPORTIONS — long and thin against short and wide
+## with a row of muzzles — because that is the symbol a player learns to read
+## across a battlefield.
 func _draw_class_gun(cls: FighterClass, rect: Rect2, alpha: float) -> void:
-	var size := rect.size.x * 0.30
-	var origin := rect.get_center() + Vector2(rect.size.x * 0.10, rect.size.y * 0.16)
+	var size := rect.size.x * 0.40
+	var origin := rect.get_center() + Vector2(rect.size.x * 0.12, rect.size.y * 0.14)
 	var spread := cls.pellets > 1
 	var length := size * (0.85 if spread else 1.45)
 	var half := size * (0.30 if spread else 0.19)
