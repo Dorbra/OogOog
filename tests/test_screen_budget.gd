@@ -30,24 +30,44 @@ func _visible_half() -> Vector2:
 	return Vector2(w / zoom, h / zoom) * 0.5
 
 
+## The reach of the longest-ranged class.
+##
+## `bullet_speed * bullet_lifetime` used to BE the reach, because there was one
+## gun. With classes it is the reach of nothing in particular — it is the base
+## the multipliers apply to — so bounding it would leave a longer class free to
+## out-range the screen while this file stayed green. Ask the guns.
 func _reach() -> float:
-	return Tuning.get_value("bullet_speed") * Tuning.get_value("bullet_lifetime")
+	var longest := 0.0
+	for class_id in FighterClass.all():
+		longest = maxf(longest, Gun.new(FighterClass.get_class_by_id(class_id)).reach())
+	return longest
 
 
-func test_a_bullet_cannot_out_range_the_visible_screen() -> void:
+func test_no_class_can_out_range_the_visible_screen() -> void:
 	# The headline rule: if something can hit you, you can see it coming.
 	# Against the SMALLER half — the vertical one, because the view is landscape.
 	# Testing the width alone leaves a band where a bot directly above you is out
 	# of frame and still in range, which is 7% of firing opportunities by
 	# measurement. The guarantee is worth more than the extra range.
+	#
+	# EVERY class, not the longest one only. A per-class assertion says which
+	# gun broke the budget; a single check on the maximum says only that
+	# something did.
 	var half := _visible_half()
 	var tightest := minf(half.x, half.y)
-	_runner.check(
-		_reach() <= tightest,
-		_fail(
-			"bullet reach %.0f fits the %.0f px half-view in EVERY direction" % [_reach(), tightest]
+	_runner.check(not FighterClass.all().is_empty(), _fail("there is at least one class to check"))
+
+	for class_id in FighterClass.all():
+		var gun := Gun.new(FighterClass.get_class_by_id(class_id))
+		_runner.check(
+			gun.reach() <= tightest,
+			_fail(
+				(
+					"%s reaches %.0f, which fits the %.0f px half-view in EVERY direction"
+					% [class_id, gun.reach(), tightest]
+				)
+			)
 		)
-	)
 
 
 func test_bots_fight_inside_the_visible_box() -> void:
@@ -55,10 +75,21 @@ func test_bots_fight_inside_the_visible_box() -> void:
 	# half is the tight axis — a bot holding station 300 px directly above you
 	# is off screen even though the same distance sideways is fine.
 	var half := _visible_half()
-	_runner.check(
-		Tuning.get_value("bot_preferred_range") <= half.y,
-		_fail("bots hold station within the %.0f px vertical half-view" % half.y)
-	)
+	# Scaled per class, exactly as BotController._preferred_range() scales it. A
+	# short-ranged class holds a proportionally shorter station, so checking the
+	# raw key would test a distance no bot actually stands at.
+	for class_id in FighterClass.all():
+		var cls := FighterClass.get_class_by_id(class_id)
+		var station := Tuning.get_value("bot_preferred_range") * cls.reach_mult
+		_runner.check(
+			station <= half.y,
+			_fail(
+				(
+					"a %s bot holds station at %.0f, inside the %.0f px vertical half-view"
+					% [class_id, station, half.y]
+				)
+			)
+		)
 	_runner.check(
 		Tuning.get_value("bot_ambush_range") <= half.y, _fail("and ambush from inside it too")
 	)

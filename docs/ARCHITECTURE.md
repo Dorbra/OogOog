@@ -51,6 +51,8 @@ Three consequences worth stating plainly:
 | `src/sim/` also holds `match_state.gd` | Simulation | `Tuning` | Phases, score, clock and the win condition — see [ADR-0017](decisions/0017-the-match-is-sim-state.md) |
 | `src/sim/` also holds `aim.gd` | Simulation | none | The one projectile-intercept solver, shared by the player's auto-aim and the bots — see [ADR-0020](decisions/0020-aim-assist-must-predict.md) |
 | `src/ai/` | Producer | `src/sim/`, `src/arena/`, `Tuning` | `bot_controller.gd` — FSM and difficulty; `grid_path.gd` — A* over the arena grid |
+| `src/sim/fighter_class.gd` | Simulation | `Tuning`, `data/classes.json` | What makes one cat shoot differently: multipliers over the global keys, never absolutes (ADR-0028) |
+| `src/sim/hazard.gd` | Simulation | none | Pooled ground hazard — caltrops. Damage per second, never once on entry |
 | `src/view/` | Presentation | everything | `game_view`, `camera_rig`, `fx`, `hud`, `cat_view`, `terrain`, `palette`, `safe_area` |
 | `src/debug/` | Tooling | everything | `tuning`, `debug_overlay`, `build_info` |
 | `src/main.gd` | Composition root | everything | wires the graph, pumps the tick |

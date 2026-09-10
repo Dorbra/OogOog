@@ -121,9 +121,19 @@ func _cone_is_clear(arena: Arena, p: Vector2, q: Vector2, cone_deg: float) -> bo
 ## broken twice: 400 px went out of sight range in the pacing pass, and 300 px
 ## did too — and one of those failures would have been SILENT, asserting "the
 ## bot held fire" against a bot that simply had no target.
-func _engage_distance() -> float:
+## A distance where `bot` can see AND shoot the thing it is staged against.
+##
+## THE BOT'S OWN GUN, not the global keys. This used to read
+## `bot_preferred_range + 60` straight from Tuning, which was fine while every
+## fighter carried the identical gun and silently wrong the moment classes
+## landed: fighters[1] is a Skirmisher with 62% of a Ranger's reach, so four
+## tests staged it 184 px from a target it can only hit at 143 and then asserted
+## it shoots. The bot was right and the fixture was wrong — a test that hard-codes
+## an assumption about a value under test measures the assumption.
+func _engage_distance(bot: Fighter) -> float:
 	return minf(
-		Tuning.get_value("bot_sight_range") * 0.8, Tuning.get_value("bot_preferred_range") + 60.0
+		minf(Tuning.get_value("bot_sight_range") * 0.8, BotController.preferred_range(bot) + 60.0),
+		bot.gun.effective_range() * 0.8
 	)
 
 
@@ -208,7 +218,7 @@ func test_the_reaction_delay_holds_the_first_shot_and_then_releases_it() -> void
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
 	_runner.check(
-		_place(w, bot, foe, _engage_distance(), false), _fail("the arena offers a clear pair")
+		_place(w, bot, foe, _engage_distance(bot), false), _fail("the arena offers a clear pair")
 	)
 
 	_tune("bot_skill", 0.0)
@@ -241,7 +251,7 @@ func test_a_bot_cannot_fire_faster_than_the_gun_allows() -> void:
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
 	_runner.check(
-		_place(w, bot, foe, _engage_distance(), false), _fail("the arena offers a clear pair")
+		_place(w, bot, foe, _engage_distance(bot), false), _fail("the arena offers a clear pair")
 	)
 
 	_tune("bot_skill", 1.0)
@@ -269,7 +279,10 @@ func test_a_bot_cannot_fire_faster_than_the_gun_allows() -> void:
 	# to whatever the bot happens to be doing.
 	#
 	# +1 for the shot on tick zero, before any cooldown has been spent.
-	var allowed := int(1.0 / Tuning.get_value("fire_interval")) + 1
+	# THIS GUN's interval, not the global key. A Skirmisher fires at 0.8x the
+	# base interval, so the global number allows 6 shots a second while the bot
+	# legitimately takes 7 — the guard would have called a correct bot a cheat.
+	var allowed := int(1.0 / bot.gun.fire_interval()) + 1
 	_runner.check(
 		shots <= allowed, _fail("fired %d times in a second; the gun allows %d") % [shots, allowed]
 	)
@@ -285,7 +298,7 @@ func test_a_bot_will_not_fire_into_stone() -> void:
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
 	_runner.check(
-		_place(w, bot, foe, _engage_distance(), true), _fail("the arena offers a blocked pair")
+		_place(w, bot, foe, _engage_distance(bot), true), _fail("the arena offers a blocked pair")
 	)
 
 	foe.reveal_timer = 999.0
@@ -326,7 +339,7 @@ func test_the_skill_slider_measurably_narrows_the_spread() -> void:
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
 	_runner.check(
-		_place(w, bot, foe, _engage_distance(), false, 35.0),
+		_place(w, bot, foe, _engage_distance(bot), false, 35.0),
 		_fail("the arena offers a wide-open pair")
 	)
 
@@ -370,7 +383,7 @@ func test_leading_puts_the_shot_ahead_of_a_moving_target() -> void:
 	# the test failed loudly, which is the only reason it is not still passing
 	# with the bot aiming at nothing.
 	_runner.check(
-		_place(w, bot, foe, _engage_distance(), false), _fail("the arena offers a clear pair")
+		_place(w, bot, foe, _engage_distance(bot), false), _fail("the arena offers a clear pair")
 	)
 
 	_tune("bot_skill", 1.0)
@@ -458,7 +471,7 @@ func test_a_hurt_bot_retreats_and_breaks_the_line_of_sight() -> void:
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
 	_runner.check(
-		_place(w, bot, foe, _engage_distance(), false), _fail("the arena offers a clear pair")
+		_place(w, bot, foe, _engage_distance(bot), false), _fail("the arena offers a clear pair")
 	)
 
 	_tune("bot_retreat_health", 0.35)
@@ -639,7 +652,7 @@ func test_a_bot_stands_still_for_part_of_the_fight() -> void:
 	var bot: Fighter = w.fighters[1]
 	var foe := _foe_of(w, bot)
 	_runner.check(
-		_place(w, bot, foe, _engage_distance(), false), _fail("the arena offers a clear pair")
+		_place(w, bot, foe, _engage_distance(bot), false), _fail("the arena offers a clear pair")
 	)
 
 	_tune("bot_skill", 0.2)

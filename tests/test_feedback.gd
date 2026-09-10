@@ -141,7 +141,11 @@ func test_a_bot_will_not_fire_at_something_it_cannot_reach() -> void:
 		if f != bot and f != foe:
 			f.position = away
 
-	var reach := bot.gun.speed() * Tuning.get_value("bullet_lifetime")
+	# bot.gun.reach(), not speed x bullet_lifetime. Those were the same number
+	# while every fighter carried the same gun; with classes they are not, and
+	# the hand-rolled version says 249 px for a Skirmisher that actually reaches
+	# 143. Ask the gun how far it shoots.
+	var reach := bot.gun.reach()
 
 	# Sight range is widened for this test on purpose. At the shipped defaults
 	# sight (230) and reach (226) are only 4 px apart, so "acquired but out of

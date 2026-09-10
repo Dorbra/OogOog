@@ -81,7 +81,12 @@ func _build() -> void:
 		# You are always ginger. Teammates and opponents carry the team colour,
 		# so "which of these is me" never depends on reading a team colour.
 		view.tint = Palette.CAT_PLAYER if is_player else _team_tint(f.team)
-		view.show_gun = is_player
+		view.fighter_class = f.fighter_class
+		# Every cat's gun is drawn now, not just yours. It used to be yours alone
+		# because the gun carried nothing but your own aim; with classes it also
+		# carries WHAT that cat is, and "the thing running at me is a shotgun"
+		# has to be readable without a word of text on screen.
+		view.show_gun = true
 		view.z_index = 2 if is_player else 1
 		add_child(view)
 		_fighter_views.append(view)
@@ -129,6 +134,38 @@ func _process(delta: float) -> void:
 	_track_trails()
 	queue_redraw()
 	_canopy.queue_redraw()
+
+
+## Caltrops, drawn on the GROUND layer so cats walk over them rather than
+## behind them. A hazard that renders on top of the fighter standing in it reads
+## as a thing in the air, and the whole mechanic is that it is underfoot.
+func _draw_hazards() -> void:
+	for hazard in _world.hazards:
+		if not hazard.active:
+			continue
+		# Fades out as it expires, so "this is about to stop hurting" is visible
+		# rather than something you have to have been counting.
+		var fade: float = clampf(
+			hazard.life / maxf(Tuning.get_value("caltrops_time"), 0.01), 0.0, 1.0
+		)
+		var tint := Palette.ARROW
+		draw_circle(hazard.position, hazard.radius, Color(tint.r, tint.g, tint.b, 0.10 * fade))
+		draw_arc(
+			hazard.position,
+			hazard.radius,
+			0.0,
+			TAU,
+			36,
+			Color(tint.r, tint.g, tint.b, 0.55 * fade),
+			3.0
+		)
+		# A scatter of spikes, placed off the hazard's own position so a patch
+		# looks the same every frame instead of shimmering.
+		var seed_x := int(hazard.position.x)
+		for i in 7:
+			var angle := TAU * float((i * 7 + seed_x) % 7) / 7.0
+			var at := hazard.position + Vector2(cos(angle), sin(angle)) * hazard.radius * 0.55
+			draw_circle(at, 3.5, Color(tint.r, tint.g, tint.b, 0.8 * fade))
 
 
 func _draw_canopy() -> void:
@@ -191,6 +228,10 @@ func _draw() -> void:
 	var alpha := Engine.get_physics_interpolation_fraction()
 
 	_terrain.draw_into(self, _camera.view_rect(get_viewport_rect().size))
+	# Between the ground and the aim line: caltrops are ON the terrain, and the
+	# aim preview has to stay the topmost thing in the world layer because it is
+	# the one element the player is actively steering.
+	_draw_hazards()
 	_draw_aim_preview(alpha)
 
 	for i in _fighter_views.size():
@@ -202,6 +243,7 @@ func _draw() -> void:
 
 	_draw_bullets(alpha)
 	_draw_magazine_pips()
+	_draw_charge_ring()
 
 
 func _draw_bullets(alpha: float) -> void:
@@ -364,6 +406,33 @@ func _draw_magazine_pips() -> void:
 		draw_rect(r, Color(1, 1, 1, 0.18))
 		if i < f.gun.magazine:
 			draw_rect(r, Palette.ARROW)
+
+
+## Ability charge, as an arc around the player's feet.
+##
+## In WORLD space beside the ammo pips for the same reason they are: counting
+## your charge must not mean looking away from the fight. An arc rather than a
+## bar because it is unmistakably a different quantity from the ammo row two
+## pixels below it, and because "the ring closed" is readable at a glance by
+## somebody who cannot read a number.
+func _draw_charge_ring() -> void:
+	var f := _world.player
+	if not f.alive():
+		return
+
+	var centre := f.position
+	var radius := f.radius * 1.34
+	# The empty track, so the ring is visibly a thing that FILLS rather than
+	# appearing from nowhere at 100%.
+	draw_arc(centre, radius, 0.0, TAU, 44, Color(0.05, 0.06, 0.08, 0.45), 4.0)
+	if f.charge <= 0.0:
+		return
+
+	# Starts at the top and sweeps clockwise, which is the direction every dial
+	# a child has seen turns.
+	var start := -PI * 0.5
+	var colour := Palette.ARROW if f.charge >= 1.0 else Palette.ARROW.darkened(0.25)
+	draw_arc(centre, radius, start, start + TAU * f.charge, 44, colour, 4.0)
 
 
 func _draw_health_bar(f: Fighter, chip: float) -> void:

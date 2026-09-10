@@ -22,6 +22,14 @@ const MAX_SIZE := 3
 const ICON := 132.0
 const ICON_GAP := 40.0
 
+## The class row sits above the team-size row and is drawn with the SAME cat
+## icon, distinguished only by the gun in its paws. That is deliberate: the gun
+## silhouette is what tells a class apart mid-fight, so the picker teaches the
+## exact symbol the game then uses. A different icon here would teach a symbol
+## that appears nowhere else.
+const CLASS_ICON := 118.0
+const CLASS_GAP := 56.0
+
 var _state: MatchState
 var _body: Texture2D
 var _face: Texture2D
@@ -106,6 +114,14 @@ func _gui_input(event: InputEvent) -> void:
 		return
 
 	if _state.phase == MatchState.Phase.SETUP:
+		# Classes first: tapping one changes the pick and leaves the screen up,
+		# so a five-year-old can try both and watch the gun change before
+		# committing to anything.
+		for i in FighterClass.count():
+			if _class_rect(i).has_point(at):
+				Tuning.set_value("player_class", float(i))
+				accept_event()
+				return
 		for i in MAX_SIZE:
 			if _slot_rect(i).has_point(at):
 				size_chosen.emit(i + 1)
@@ -125,6 +141,17 @@ func _slot_rect(index: int) -> Rect2:
 	var left := view.x * 0.5 - span * 0.5
 	return Rect2(
 		Vector2(left + float(index) * (ICON + ICON_GAP), view.y * 0.34), Vector2(ICON, ICON)
+	)
+
+
+func _class_rect(index: int) -> Rect2:
+	var view := get_viewport_rect().size
+	var count := maxi(FighterClass.count(), 1)
+	var span := float(count) * CLASS_ICON + float(count - 1) * CLASS_GAP
+	var left := view.x * 0.5 - span * 0.5
+	return Rect2(
+		Vector2(left + float(index) * (CLASS_ICON + CLASS_GAP), view.y * 0.06),
+		Vector2(CLASS_ICON, CLASS_ICON)
 	)
 
 
@@ -175,6 +202,8 @@ func _draw_cat(rect: Rect2, tint: Color, alpha: float) -> void:
 ## Tap the third cat and you get three a side. The row IS the number — there is
 ## nothing else to understand, and nothing to read.
 func _draw_setup() -> void:
+	_draw_class_row()
+
 	var chosen := clampi(int(Tuning.get_value("bot_team_size")), 1, MAX_SIZE)
 	for i in MAX_SIZE:
 		var rect := _slot_rect(i)
@@ -195,6 +224,72 @@ func _draw_setup() -> void:
 		),
 		Palette.ARROW
 	)
+
+
+## One cat per class, each holding its own gun, the picked one lit.
+func _draw_class_row() -> void:
+	var picked := clampi(int(Tuning.get_value("player_class")), 0, FighterClass.count() - 1)
+	for i in FighterClass.count():
+		var rect := _class_rect(i)
+		var lit := i == picked
+		# 0.45 rather than the team row's 0.2. Those two rows are asking
+		# different questions: an unlit cat there means "not this many", and
+		# reads correctly as absent. An unlit class here is still an OPTION, and
+		# at 0.25 against the dimmed arena it read as a shadow rather than as
+		# something to tap — which for a non-reader is the whole instruction.
+		var alpha := 1.0 if lit else 0.45
+		_draw_cat(rect, Palette.CAT_PLAYER, alpha)
+		_draw_class_gun(FighterClass.at(i), rect, alpha)
+		if lit:
+			draw_arc(
+				rect.get_center() + Vector2(0, 4),
+				CLASS_ICON * 0.52,
+				0.0,
+				TAU,
+				40,
+				Palette.ARROW,
+				5.0
+			)
+
+
+## The same silhouette CatView draws in the fight, at rest pointing right.
+##
+## Deliberately NOT shared code with CatView. That one is a Node2D drawing in
+## world space around a cat's own origin; this fills a rect on a CanvasLayer.
+## Sharing them would mean a coordinate-space adapter for the sake of a dozen
+## lines, and the thing that actually has to match is the PROPORTIONS — long and
+## thin against short and wide — which is what a player learns to read.
+func _draw_class_gun(cls: FighterClass, rect: Rect2, alpha: float) -> void:
+	var size := rect.size.x * 0.30
+	var origin := rect.get_center() + Vector2(rect.size.x * 0.10, rect.size.y * 0.16)
+	var spread := cls.pellets > 1
+	var length := size * (0.85 if spread else 1.45)
+	var half := size * (0.30 if spread else 0.19)
+	var muzzle := origin + Vector2(length, 0.0)
+
+	var barrel := Palette.ARROW.darkened(0.35)
+	barrel.a = alpha
+	draw_colored_polygon(
+		PackedVector2Array(
+			[
+				origin + Vector2(0.0, -half),
+				muzzle + Vector2(0.0, -half),
+				muzzle + Vector2(0.0, half),
+				origin + Vector2(0.0, half),
+			]
+		),
+		barrel
+	)
+
+	var tip := Palette.ARROW_TIP
+	tip.a = alpha
+	if not spread:
+		draw_circle(muzzle, size * 0.24, tip)
+		return
+	var pitch := half * 1.35
+	for i in cls.pellets:
+		var offset := -pitch + pitch * 2.0 * float(i) / float(maxi(cls.pellets - 1, 1))
+		draw_circle(muzzle + Vector2(0.0, offset), size * 0.15, tip)
 
 
 func _draw_countdown() -> void:

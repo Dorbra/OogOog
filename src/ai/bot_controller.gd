@@ -114,6 +114,8 @@ func think(me: Fighter, world: SimWorld, delta: float) -> InputCommand:
 	var target := _acquire(me, world)
 	state = _choose_state(me, world, target)
 
+	_maybe_use_ability(me, target)
+
 	match state:
 		State.RETREAT:
 			_do_retreat(me, world, target)
@@ -125,6 +127,45 @@ func think(me: Fighter, world: SimWorld, delta: float) -> InputCommand:
 			_do_seek(me, world)
 
 	return _cmd
+
+
+## Bots spend their charge the moment it is worth spending, per class.
+##
+## Deliberately NOT "the instant it is full". A dash burned on empty ground and
+## caltrops dropped where nobody will walk are both worse than holding, and a
+## bot that visibly wastes its ability teaches a child that abilities are
+## pointless. The condition is what the ability is FOR:
+##
+##   dash     — close the gap, so only with a target that is too far to shoot.
+##   caltrops — cover a retreat, so only while actually retreating.
+##
+## Gated on skill like everything else a bot decides: at low skill it fires them
+## more or less at random, which is a five-year-old's own ability usage and
+## exactly the difficulty this dial exists to serve.
+func _maybe_use_ability(me: Fighter, target: Fighter) -> void:
+	if not me.ability_ready():
+		return
+
+	match me.fighter_class.ability:
+		"dash":
+			# Nothing to close on, or already in range: hold it.
+			if target == null:
+				return
+			if me.position.distance_to(target.position) <= me.gun.effective_range():
+				return
+		"caltrops":
+			if state != State.RETREAT:
+				return
+		_:
+			return
+
+	# A low-skill bot sometimes just does not think of it. At skill 1.0 this is
+	# certain; at 0 it is a coin flip per opportunity, which reads as a bot that
+	# forgets it has an ability rather than one that is bad at aiming it.
+	if _rng.randf() > lerpf(0.5, 1.0, _skill()):
+		return
+
+	_cmd.ability = true
 
 
 func _tick_timers(delta: float) -> void:
@@ -245,7 +286,7 @@ func _do_engage(me: Fighter, world: SimWorld, target: Fighter) -> void:
 		return
 
 	var forward := to_target / distance
-	var preferred := Tuning.get_value("bot_preferred_range")
+	var preferred := preferred_range(me)
 
 	# Close if too far, back off if too near. Proportional rather than a hard
 	# toward/away, so a bot settles at its preferred range instead of jittering
@@ -548,6 +589,28 @@ func _nearest_bush(arena: Arena, from: Vector2, toward: Vector2) -> Vector2:
 
 
 # -------------------------------------------------------------------- skill
+
+
+## The distance this bot wants to hold, SCALED BY ITS OWN GUN.
+##
+## The global key is 170 px against a Ranger's 231 px reach — about three
+## quarters of it. Read raw, a Skirmisher (62% reach, so 143 px) would stand at
+## 170 and hold station beyond the range it can actually shoot: permanently
+## backing off, never firing, never still. That is not a tuning subtlety, it is
+## a class that does not work, and it showed up as a bot standing still 0% of a
+## fight.
+##
+## Scaling by the class multiplier keeps the same three-quarters relationship
+## for every gun, and it is what makes the Skirmisher a brawler that closes
+## rather than a Ranger that misses.
+## PUBLIC and static because the tests have to stage a bot at a distance it
+## actually wants to fight from, and computing that themselves is how three
+## fixtures ended up asserting against a station no bot stands at.
+static func preferred_range(me: Fighter) -> float:
+	return minf(
+		Tuning.get_value("bot_preferred_range") * me.fighter_class.reach_mult,
+		me.gun.effective_range() * 0.85
+	)
 
 
 ## Is this bot in the moving part of its strafe cycle?

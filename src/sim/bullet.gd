@@ -23,11 +23,27 @@ var active: bool = false
 ## knowing whose it was. This is what makes friendly fire rejectable.
 var owner_team: int = 0
 
+## Instance id of the fighter that fired it, or 0.
+##
+## The ID, never a reference. Fighter.controller already keeps a bot alive, and
+## a bullet holding a Fighter would close another cycle RefCounted cannot
+## collect — the smoke test caught exactly that shape once already, as eighteen
+## leaked objects at exit. Only the identity is needed, and only to pay the
+## shooter's ability charge when the shot lands.
+var owner_id: int = 0
+
 
 func launch(
-	from: Vector2, dir: Vector2, speed: float, dmg: float, lifetime: float, team: int = 0
+	from: Vector2,
+	dir: Vector2,
+	speed: float,
+	dmg: float,
+	lifetime: float,
+	team: int = 0,
+	shooter_id: int = 0
 ) -> void:
 	owner_team = team
+	owner_id = shooter_id
 	position = from
 	prev_position = from
 	velocity = dir * speed

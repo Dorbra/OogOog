@@ -32,6 +32,21 @@ var prev_position: Vector2 = Vector2.ZERO
 var spawn_point: Vector2 = Vector2.ZERO
 
 var health := Health.new()
+
+## Which cat this is. Assigned by SimWorld._build_teams() before the first tick,
+## and it owns the gun's numbers and the ability — see FighterClass.
+##
+## A SETTER, so the class and the gun cannot drift apart. They are two facts
+## that must always agree, and the obvious spelling — a plain field plus a
+## remember-to-rebuild-the-gun line at each call site — is the same shape as the
+## respawn() bug below, which is a bug precisely because somebody has to
+## remember. Assigning this rebuilds the gun; there is no way to set one without
+## the other.
+var fighter_class: FighterClass = FighterClass.at(0):
+	set(value):
+		fighter_class = value
+		gun = Gun.new(value)
+
 var gun := Gun.new()
 
 ## Produces this fighter's InputCommand each tick. Null means nobody is driving,
@@ -40,6 +55,15 @@ var gun := Gun.new()
 var controller: Variant = null
 
 var respawn_timer: float = 0.0
+
+## Ability charge, 0 to 1. Full means the button does something.
+##
+## Earned by damage DEALT, never by a clock. A cooldown pays you for waiting;
+## this pays you for fighting, which is the behaviour a three-minute match
+## needs and the one Brawl Stars built its Super on. It also means a player who
+## is losing a fight does not additionally get their ability last — they get it
+## for the damage they did land (ADR-0029).
+var charge: float = 0.0
 
 ## Counts down after firing. While it is above zero this fighter is visible even
 ## from inside a bush: firing gives your position away, which is what stops an
@@ -71,7 +95,7 @@ func alive() -> bool:
 func tick(cmd: InputCommand, delta: float, arena: Arena) -> void:
 	prev_position = position
 	radius = Tuning.get_value("fighter_radius")
-	health.set_maximum(Tuning.get_value("fighter_health"))
+	health.set_maximum(Tuning.get_value("fighter_health") * fighter_class.health_mult)
 	health.tick(delta)
 	# Ahead of the death check on purpose: a corpse should stop being "revealed"
 	# rather than respawning still lit up from its last shot.
@@ -117,13 +141,23 @@ func _tick_dead(delta: float) -> void:
 		respawn()
 
 
+## A fresh gun, OF THE SAME CLASS.
+##
+## The class argument is the whole point of this line. A bare Gun.new() takes
+## the default class, so every Skirmisher would silently become a Ranger three
+## seconds into the match — right stats at the whistle, wrong stats for the rest
+## of the round, and nothing on screen to say so. Pinned by
+## test_classes.gd::test_respawning_keeps_your_class.
 func respawn() -> void:
 	health.revive()
 	velocity = Vector2.ZERO
 	position = spawn_point
 	prev_position = spawn_point
 	reveal_timer = 0.0
-	gun = Gun.new()
+	# Charge SURVIVES death on purpose. Losing it would punish the player who is
+	# already losing, hardest at the moment they need the comeback most — the
+	# opposite of "competitive but not punishing" (ADR-0013).
+	gun = Gun.new(fighter_class)
 
 
 func take_damage(amount: float) -> float:
@@ -131,6 +165,29 @@ func take_damage(amount: float) -> float:
 	if not health.alive():
 		respawn_timer = Tuning.get_value("respawn_time")
 	return applied
+
+
+## Pays this fighter for `damage` landed on somebody else.
+##
+## Capped at 1.0 rather than banked: overkill on a dying target should not buy
+## the next ability early, and a Skirmisher landing three pellets at once must
+## not be paid three times over for one trigger pull it already earned.
+func add_charge(damage: float) -> void:
+	var needed := maxf(Tuning.get_value("ability_charge_damage"), 1.0)
+	charge = minf(1.0, charge + damage / needed)
+
+
+func ability_ready() -> bool:
+	return charge >= 1.0 and alive()
+
+
+## Spends the whole bar. Returns false and changes nothing when it is not full,
+## so a caller cannot half-fire an ability.
+func spend_charge() -> bool:
+	if not ability_ready():
+		return false
+	charge = 0.0
+	return true
 
 
 func apply_knockback(dir: Vector2, force: float) -> void:
@@ -148,7 +205,7 @@ func _apply_movement(move: Vector2, delta: float) -> void:
 		_decay_knockback(delta)
 		return
 
-	var target := move * Tuning.get_value("move_speed")
+	var target := move * Tuning.get_value("move_speed") * fighter_class.move_mult
 	var accel := Tuning.get_value("move_accel") * delta
 	velocity = velocity.move_toward(target, accel)
 
