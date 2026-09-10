@@ -23,11 +23,6 @@ var _overlay: Node2D
 var _cmd := InputCommand.new()
 var _tick: int = 0
 
-# Set for exactly one tick by the fire signal, then consumed by the sim.
-var _pending_shot := false
-var _pending_aim := Vector2.ZERO
-var _pending_snap := false
-
 
 func _ready() -> void:
 	var arena := Arena.new()
@@ -36,7 +31,6 @@ func _ready() -> void:
 
 	controls = TouchControls.new()
 	add_child(controls)
-	controls.shot_fired.connect(_on_shot_fired)
 
 	_camera = CameraRig.new()
 	_camera.world_size = arena.bounds().size
@@ -110,12 +104,6 @@ func _rebuild_world() -> void:
 	_camera.target_position = world.player.position
 
 
-func _on_shot_fired(aim: Vector2, snap: bool) -> void:
-	_pending_shot = true
-	_pending_aim = aim
-	_pending_snap = snap
-
-
 func _physics_process(delta: float) -> void:
 	_tick += 1
 
@@ -124,11 +112,11 @@ func _physics_process(delta: float) -> void:
 	_cmd.move = controls.move_vector
 	_cmd.aim = controls.aim_vector
 
-	if _pending_shot:
-		_cmd.fire = true
-		_cmd.aim = _pending_aim
-		_cmd.snap = _pending_snap
-		_pending_shot = false
+	# Read straight off the controls once per SIMULATION tick. This used to be a
+	# signal relayed through a one-tick pending flag, which meant a per-rendered-
+	# frame event driving a fixed 60 Hz simulation — two clocks that agreed only
+	# by accident. Firing is a state now, so the state is what gets read.
+	_cmd.fire = controls.is_firing
 
 	world.tick(_cmd, delta)
 

@@ -245,17 +245,17 @@ func _draw_bullets(alpha: float) -> void:
 ## headlessly. The alternative was proving it through a rendered frame, and a
 ## capture cannot show this at all — no render mode has a thumb on the screen —
 ## so the choice was a testable function or no gate.
-static func aim_line_strength(is_aiming: bool) -> float:
+static func aim_line_strength(is_firing: bool) -> float:
 	if Tuning.get_value("reticle_enabled") < 0.5:
 		return 0.0
-	if is_aiming:
+	if is_firing:
 		return 1.0
 	return clampf(Tuning.get_value("aim_line_idle_alpha"), 0.0, 1.0)
 
 
 ## Drawn whether or not a thumb is down.
 ##
-## It used to return early unless `is_aiming`, so the line vanished the moment
+## It used to return early unless a thumb was down, so the line vanished the moment
 ## you released — and since the aim vanished with it, there was nothing to draw.
 ## Now the aim persists, so the line persists too, dimmed: at any moment you can
 ## see the shot you would take, which is what "keep a line-of-fire" means on a
@@ -266,7 +266,7 @@ func _draw_aim_preview(alpha: float) -> void:
 
 	# Dimmed when the thumb is up. The assist and the wall cast below run in BOTH
 	# states on purpose: a faint line that lies is worse than no faint line.
-	var strength := aim_line_strength(_controls.is_aiming)
+	var strength := aim_line_strength(_controls.is_firing)
 	if strength <= 0.0:
 		return
 

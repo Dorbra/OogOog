@@ -165,88 +165,113 @@ func test_bullet_deactivates_outside_bounds() -> void:
 	_runner.check(not bullet.active, _fail("deactivates when it leaves the arena"))
 
 
-# ------------------------------------------------------------- tap to fire
+# --------------------------------------------------------- automatic fire
 
 
-## A press alone fires nothing; the RELEASE is the shot.
+## Holding the thumb fires; letting go stops. That is the whole trigger.
 ##
-## The whole complaint that produced this weapon was a 450 ms hold in front of
-## every shot. What replaced it has to be checked for the opposite failure —
-## firing on touch-down would mean a shot leaves before you have aimed it, which
-## is a different way of taking the aim out of the player's hands.
-func test_a_press_fires_nothing_and_the_release_fires_once() -> void:
+## Firing stopped being an EVENT here and became a STATE — there is no
+## shot_fired signal any more, and SimWorld reads `is_firing` off the controls
+## once per simulation tick. So this asserts the state, not a count of emissions.
+func test_holding_fires_and_releasing_stops() -> void:
 	var controls := TouchControls.new()
-	var shots: Array = []
-	controls.shot_fired.connect(func(aim: Vector2, snap: bool): shots.append([aim, snap]))
+	_runner.check(not controls.is_firing, _fail("a fresh gun is not firing"))
 
 	controls._assign_finger(0, Vector2(900, 300))
-	_runner.check(shots.is_empty(), _fail("touching down fires nothing"))
+	_runner.check(controls.is_firing, _fail("a thumb down means firing"))
 
 	controls._release_finger(0)
-	_runner.check(shots.size() == 1, _fail("releasing fires exactly one shot"))
+	_runner.check(not controls.is_firing, _fail("and lifting it stops"))
 
 
-## A release that barely moved is a tap: no direction of its own, auto-aimed by
-## the caller. That is the five-year-old's shot and it must not need a drag.
-func test_a_bare_tap_is_flagged_for_auto_aim() -> void:
-	var controls := TouchControls.new()
-	var shots: Array = []
-	controls.shot_fired.connect(func(aim: Vector2, snap: bool): shots.append([aim, snap]))
+## Firing is fed to the simulation as a plain flag, and the gun's cooldown is
+## what turns a held trigger into a rate. Held down for a second, the gun must
+## produce the rounds its interval allows and no more.
+func test_a_held_trigger_produces_the_guns_rate_and_no_more() -> void:
+	var w := _world()
+	var cmd := InputCommand.new()
+	cmd.aim = Vector2.RIGHT
+	cmd.fire = true
 
-	controls._assign_finger(0, Vector2(900, 300))
-	controls._aim_current = Vector2(903, 302)
-	controls._release_finger(0)
+	# An Array, not an int: a GDScript lambda captures by VALUE, so `shots += 1`
+	# on a captured integer increments a copy and reports zero forever. This file
+	# is the second place in the repo to hit it.
+	var shots := []
+	w.fired.connect(func(_p: Vector2, _d: Vector2) -> void: shots.append(1))
+	for _i in 60:
+		w.player.gun.magazine = w.player.gun.capacity()
+		w.tick(cmd, DT)
 
-	_runner.check(shots.size() == 1, _fail("the tap fired"))
-	_runner.check(shots[0][1], _fail("and is flagged as a tap"))
-	_runner.check(shots[0][0] == Vector2.ZERO, _fail("carrying no direction of its own"))
-
-
-## Drag far enough and the shot goes where you dragged, untouched.
-func test_a_dragged_release_goes_where_it_was_dragged() -> void:
-	var controls := TouchControls.new()
-	var shots: Array = []
-	controls.shot_fired.connect(func(aim: Vector2, snap: bool): shots.append([aim, snap]))
-
-	var origin := Vector2(900, 300)
-	controls._assign_finger(0, origin)
-	controls._aim_current = origin + Vector2(0, -200)
-	# Pumped, not skipped. The shot now goes along aim_vector — the smoothed
-	# direction the preview actually draws — so a test that sets the drag and
-	# releases without ever running the aim update is testing a path the game
-	# does not have.
-	controls._update_aim(1.0 / 60.0)
-	controls._release_finger(0)
-
-	_runner.check(shots.size() == 1, _fail("the dragged release fired"))
-	_runner.check(not shots[0][1], _fail("and is NOT a tap"))
+	var allowed := int(1.0 / Tuning.get_value("fire_interval")) + 1
+	_runner.check(shots.size() >= 1, _fail("holding the trigger fires at all"))
 	_runner.check(
-		(shots[0][0] as Vector2).distance_to(Vector2.UP) < 0.001,
-		_fail("pointing where it was dragged, got %s" % str(shots[0][0]))
+		shots.size() <= allowed,
+		_fail("a second of holding fired %d rounds; the gun allows %d" % [shots.size(), allowed])
 	)
 
 
-## Classified on drag alone, however long the thumb rested.
-##
-## A hold threshold used to be half of this decision: a careful player lining up
-## a shot had it silently reclassified as a tap once they took too long, so the
-## game auto-aimed a shot they were in the middle of aiming themselves.
-func test_a_long_careful_drag_is_still_an_aimed_shot() -> void:
-	var controls := TouchControls.new()
-	var shots: Array = []
-	controls.shot_fired.connect(func(aim: Vector2, snap: bool): shots.append([aim, snap]))
+## And the magazine still runs dry under a held trigger, rather than the hold
+## bypassing ammunition entirely.
+func test_a_held_trigger_still_runs_the_magazine_dry() -> void:
+	var w := _world()
+	var cmd := InputCommand.new()
+	cmd.aim = Vector2.RIGHT
+	cmd.fire = true
 
-	var origin := Vector2(900, 300)
-	controls._assign_finger(0, origin)
-	controls._aim_current = origin + Vector2(0, -200)
-	# Ten seconds of deliberation, which the old classifier would have called a
-	# tap the moment it passed snap_max_hold.
-	for _i in 600:
-		controls._update_aim(1.0 / 60.0)
-	controls._release_finger(0)
+	var capacity := w.player.gun.capacity()
+	var shots := []
+	w.fired.connect(func(_p: Vector2, _d: Vector2) -> void: shots.append(1))
 
-	_runner.check(shots.size() == 1, _fail("it still fires on release"))
-	_runner.check(not shots[0][1], _fail("and is still an aimed shot, not a tap"))
+	var ticks := 60
+	for _i in ticks:
+		w.tick(cmd, DT)
+
+	# The bound is DERIVED, and the reload is part of it: a magazine plus
+	# whatever came back while the trigger was held. Writing `<= capacity` here
+	# was wrong and the test caught it — over one second at a 0.55 s reload the
+	# gun legitimately produces one round more than the magazine holds.
+	var seconds := float(ticks) * DT
+	var returned := int(seconds / Tuning.get_value("reload_time"))
+	var allowed := capacity + returned + 1
+	_runner.check(
+		shots.size() <= allowed,
+		(
+			_fail("held fire spent %d rounds; a %d-round magazine plus %d reloaded allows %d")
+			% [shots.size(), capacity, returned, allowed]
+		)
+	)
+	# And far below an ungated trigger, which would fire on all 60 ticks.
+	_runner.check(shots.size() < ticks / 2, _fail("ammunition still gates a held trigger"))
+
+
+## A drag under the threshold is thumb noise and must not swing the aim; a drag
+## over it must take it. One threshold, so there is no gap between "this counts
+## as aiming" and "this counts as a shot" — there used to be two numbers here
+## that disagreed by 14 px.
+func test_only_a_real_drag_moves_the_aim() -> void:
+	var threshold := Tuning.get_value("aim_min_drag")
+	var lengths: Array[float] = [4.0, 10.0, 25.0, 27.0, 60.0, 200.0]
+
+	for length in lengths:
+		var controls := TouchControls.new()
+		var origin := Vector2(900, 300)
+		controls._assign_finger(0, origin)
+		controls._aim_current = origin + Vector2(0, -length)
+		controls._update_aim(DT)
+
+		if length < threshold:
+			_runner.check(
+				controls.aim_vector == Vector2.ZERO,
+				_fail("a %.0f px twitch leaves the aim alone" % length)
+			)
+			continue
+		_runner.check(
+			controls.aim_vector.distance_to(Vector2.UP) < 0.001,
+			(
+				_fail("a %.0f px drag points the aim where it was dragged, got %s")
+				% [length, str(controls.aim_vector)]
+			)
+		)
 
 
 # ------------------------------------------------- the aim outlives the shot
@@ -256,23 +281,19 @@ func test_a_long_careful_drag_is_still_an_aimed_shot() -> void:
 ##
 ## Releasing used to zero the aim, and Fighter.tick() falls through to the
 ## MOVEMENT direction when the aim is zero — so the cat swung to face wherever it
-## was walking the instant you shot, and the gun barrel swung with it. There was
-## no line of fire to keep.
+## was walking the instant you shot, and the gun barrel swung with it.
 func test_the_aim_survives_the_shot_and_walking_does_not_move_it() -> void:
 	var w := _world()
 	var cmd := InputCommand.new()
 
-	# Aim hard left and fire.
 	cmd.aim = Vector2.LEFT
 	cmd.fire = true
 	w.tick(cmd, DT)
-	var after_shot := w.player.facing
 	_runner.check(
-		after_shot.distance_to(Vector2.LEFT) < 0.01,
-		_fail("firing points the cat where it fired, got %s" % str(after_shot))
+		w.player.facing.distance_to(Vector2.LEFT) < 0.01,
+		_fail("firing points the cat where it fired, got %s" % str(w.player.facing))
 	)
 
-	# Now walk the other way for a full second, aiming at nothing.
 	cmd.clear()
 	cmd.move = Vector2.RIGHT
 	for _i in 60:
@@ -282,90 +303,6 @@ func test_the_aim_survives_the_shot_and_walking_does_not_move_it() -> void:
 		w.player.facing.distance_to(Vector2.LEFT) < 0.01,
 		_fail("a second of walking right leaves facing at %s" % str(w.player.facing))
 	)
-
-
-## The tap is the shot a five-year-old uses, and it is the one that would still
-## reset: _emit_shot() sends Vector2.ZERO for a tap because the caller auto-aims
-## it, so the firing tick would fall straight through to the movement branch.
-func test_a_tap_faces_where_it_actually_fired() -> void:
-	var w := _world()
-	var foe := w.enemies_of(w.player.team)[0]
-	# Put an enemy somewhere the auto-aim will find, and walk the other way.
-	foe.position = w.player.position + Vector2(0, -120)
-
-	var cmd := InputCommand.new()
-	cmd.fire = true
-	cmd.snap = true
-	cmd.move = Vector2.RIGHT
-	w.tick(cmd, DT)
-
-	_runner.check(
-		w.player.facing.y < -0.5,
-		_fail("a tap faces the target it auto-aimed at, got %s" % str(w.player.facing))
-	)
-
-
-## The preview draws along the SMOOTHED aim. Firing the raw drag meant a quick
-## flick put the bullet somewhere the dotted line had never pointed.
-func test_the_shot_goes_where_the_line_was_pointing() -> void:
-	var controls := TouchControls.new()
-	var shots: Array = []
-	controls.shot_fired.connect(func(aim: Vector2, _snap: bool): shots.append(aim))
-
-	var origin := Vector2(900, 300)
-	controls._assign_finger(0, origin)
-
-	# Establish an aim, then FLICK to a new direction and release immediately —
-	# one frame of smoothing, so aim_vector is nowhere near the raw drag.
-	controls._aim_current = origin + Vector2(0, -200)
-	controls._update_aim(DT)
-	controls._aim_current = origin + Vector2(200, 0)
-	controls._update_aim(DT)
-
-	var previewed := controls.aim_vector
-	controls._release_finger(0)
-
-	_runner.check(shots.size() == 1, _fail("the flick fired"))
-	_runner.check(
-		(shots[0] as Vector2).distance_to(previewed) < 0.001,
-		_fail("fired %s but the line was pointing %s" % [str(shots[0]), str(previewed)])
-	)
-	# And the mirror, or the above passes on a game where nothing smooths at all.
-	_runner.check(
-		previewed.distance_to(Vector2.RIGHT) > 0.05,
-		_fail("the flick really was mid-smoothing, got %s" % str(previewed))
-	)
-
-
-## No drag length may be classified as an aimed shot without having moved the
-## aim. Two thresholds used to disagree — snap_max_drag 26, aim_min_drag 40 — so
-## a drag in between fired along an aim nothing had updated.
-func test_no_drag_length_fires_along_an_aim_it_never_set() -> void:
-	var threshold := Tuning.get_value("snap_max_drag")
-	var lengths: Array[float] = [10.0, 20.0, 27.0, 30.0, 39.0, 45.0, 120.0]
-	for length in lengths:
-		var controls := TouchControls.new()
-		var shots: Array = []
-		controls.shot_fired.connect(func(aim: Vector2, snap: bool): shots.append([aim, snap]))
-
-		var origin := Vector2(900, 300)
-		controls._assign_finger(0, origin)
-		controls._aim_current = origin + Vector2(0, -length)
-		controls._update_aim(DT)
-		controls._release_finger(0)
-
-		var is_tap: bool = shots[0][1]
-		if length < threshold:
-			_runner.check(is_tap, _fail("a %.0f px drag is a tap" % length))
-			continue
-		_runner.check(not is_tap, _fail("a %.0f px drag is an aimed shot" % length))
-		_runner.check(
-			(shots[0][0] as Vector2).distance_to(Vector2.UP) < 0.001,
-			(
-				_fail("and a %.0f px aimed shot points where it was dragged, got %s")
-				% [length, str(shots[0][0])]
-			)
-		)
 
 
 ## The line of fire stays on screen after the shot.
