@@ -60,19 +60,28 @@ Three, in priority order. When two conflict, the higher one wins.
 Every mechanic has to be legible at a glance, mid-fight, on a small bright
 screen. This is why:
 
-- Arrows are the warmest, brightest thing on screen (`#ffd166`) against
+- Bullets are the warmest, brightest thing on screen (`#ffd166`) against
   mid-to-dark green grass.
 - **Walls are stone, bushes are foliage.** They behave completely differently —
-  one stops arrows, one only breaks sight — and must be distinguishable without a
-  legend.
-- Draw strength is *one* number instead of a recoil/spread/accuracy-cone stack.
-- Damage numbers are outlined, and full-draw hits get a distinct colour.
+  one stops bullets, one only breaks sight — and must be distinguishable without
+  a legend.
+- Every shot is the same shot: no recoil, no spread, no accuracy cone. One
+  bullet, one behaviour, nothing to learn before you can hit anything.
+- Damage numbers are outlined, so they read against grass and stone alike.
 
-### II. Commitment must be rewarded, and the fast option must stay viable
+### II. Aim is the skill, and the game must not punish you for lacking it
 
-The central tension. A full draw is slow, precise and hurts; a snap shot is
-instant, weak and *aims itself*. Neither dominates, so the player is making a
-real decision several times a second rather than executing one optimal input.
+This pillar used to read *"commitment must be rewarded"*, and described a
+tension between a slow precise full draw and an instant weak snap shot. Both
+halves of that are gone: the draw curve was deleted with the bow, and the tap
+shot was deleted when the gun went automatic. Neither was replaced, which is an
+honest debt rather than a design — **there is currently no shooting decision to
+make beyond where to point**, and M3.4's class asymmetry is what owes it.
+
+What survives is the audience rule underneath it: a five-year-old must be able
+to hit things. Auto-aim is a narrow leading nudge that costs nothing, never a
+tax, and `aim_assist_deg` widens it on the device in seconds if a session is
+going badly.
 
 ### III. The feedback loop is part of the design
 
@@ -146,24 +155,21 @@ their spawns at the start of a round.
 | Damage | 40 — **5 hits to a kill, 0.90 s of perfect fire** |
 | Deviation | none |
 | Fire interval | 0.18 s → 5.6 shots/s in a burst |
-| Magazine / reload | 10 rounds (1.8 s of continuous fire), one back every 0.55 s |
+| Magazine / reload | 5 rounds (0.9 s of continuous fire), one back every 0.55 s |
 | Required lead | 6.1°, against a cat subtending 7.2° |
 
-Measured over 24 seeded matches: **42.5 kills, a cat lives 16.8 s, ~7 deaths
+Measured over 24 seeded matches: **40.5 kills, a cat lives ~17 s, ~7 deaths
 each** — 3.2× the lethality of the first gun tuning, chosen deliberately after
 being shown that number ([ADR-0025](decisions/0025-a-rate-is-not-a-count.md)).
-`match_target_kills` is 35 so the clock still decides 23 matches in 24.
+`match_target_kills` is 35 so the clock decides 24 matches in 24.
 
 That last row is the design in one line: **point at a cat and the bullet arrives
 where you pointed**, at every range. Nothing varies between one shot and the
-next, which is a real loss — draw strength was the only shooting depth there was.
-Class asymmetry in M3.4 is what replaces it, and until then the shooting is
+next, which is a real loss — the draw curve was the only shooting depth there
+was. Class asymmetry in M3.4 is what replaces it, and until then the shooting is
 deliberately plain.
 
-Full draw takes `draw_time_full` = 0.45 s. A full-draw hit is nearly 3× a rushed
-one and flies dead straight, which is the entire argument for committing.
-
-**Reach is not a free parameter.** 226 px sits inside the 248 px shortest
+**Reach is not a free parameter.** 231 px sits inside the 248 px shortest
 half-axis of what the camera shows, and
 [ADR-0016](decisions/0016-range-is-bounded-by-the-camera.md) holds it there: if
 something can hit you, you can see it. **So does bot sight range** — that bound
@@ -173,9 +179,10 @@ was *"the bots just shot at me from out-of-screen"*, and measurement agreed —
 79% of the enemies in range to hit the player were off screen. It is now 0%, and
 a test fails if that changes.
 
-**Time to kill: 200 hp ÷ 28 = about 7 full-draw hits**, up from 3.3. With three
-enemies able to focus one player, 3.3 hits was the "dead in a second" the same
-playtest reported.
+**Time to kill: 200 hp ÷ 40 = 5 hits**, which is 0.90 s of perfect fire. It has
+been as low as 3.3 hits — the "dead in a second" of the first 3v3 playtest — and
+as high as 7. Five is where the person playing it stopped complaining, and it is
+two sliders (`bullet_damage`, `fighter_health`) if that changes.
 
 ### The camera: steady, and framed like the reference game
 
@@ -211,24 +218,34 @@ snappy — what stops it feeling sharp is that it is slow *relative to the scree
 not a long acceleration curve, and on a touch screen a real glide reads as
 unresponsive rather than as momentum.
 
-### Aiming: leading is the skill, and the game only nudges
+### Aiming: leading is NOT currently the skill, and this section says so
 
 | | |
 |---|---|
-| Arrow speed | 520 px/s at full draw, 0.44 s of life → **229 px** of reach |
-| Lead a player owes | ~16° at any range |
-| Unled shots still hit within | **65% of reach** — measured, not derived |
+| Bullet speed | 1400 px/s, 0.165 s of life → **231 px** of reach |
+| Lead a player owes | 6.1°, against a cat subtending 7.2° |
+| Unled shots still hit within | **100% of reach** — measured, not derived |
 
-Point straight at a close cat and you connect; at the range bots hold station you
-have to lead. That band is the answer to *"movement not too fast, but your aim
-skill does matter"*, and it is set by `arrow_lifetime` far more than by arrow
-speed — a longer flight is more drift to lead.
+This is a correction, and it is worth keeping visible because the section it
+replaces claimed the opposite. Under the bow, an arrow crossed its range in
+440 ms and a cat drifted more than its own width during the flight, so leading
+was real and this document called it the skill. A bullet crosses the same
+distance in 165 ms. **Point at a cat anywhere in range and you hit it.**
 
-It is **measured by firing an arrow**, never computed. The obvious arithmetic —
-compare the lead angle against the angle a cat subtends — said leading mattered
-past 75% of reach; fired for real, an unled shot hit at 100% of it, because the
-swept collision test scores the arrow's closest approach rather than where it
-lands. `tools/measure_matches.gd` prints the real number for the current build.
+So the answer to *"movement not too fast, but your aim skill does matter"* is
+currently only half true. What is left is tracking a moving target with your
+thumb and choosing where to stand — real skills, but not the one that was
+promised, and the trade came with the gun the user asked for:
+
+> *"the Arrow shooting is sluggish and cant be expected, lets change back to
+> GUNS! with a clear line-of-fire"*
+
+The number is **measured by firing a real bullet**, never computed. The obvious
+arithmetic — compare the lead angle against the angle a cat subtends — said
+leading should matter past 75% of reach; fired for real it never does, because
+the swept collision test scores the projectile's closest approach rather than
+where it ends up. `tools/measure_matches.gd` prints the true figure for the
+current build on every run, so this table cannot quietly go stale again.
 
 ### Healing: why a fight resolves at all
 
@@ -431,10 +448,14 @@ is no image editor in this workflow.
 | M2 arena cover | done |
 | M3.1 fighters, teams, **bots** | done |
 | M3.1e pacing — nothing shoots from off-screen | done |
-| **M3.2 match loop — timer, score, results** | done |
-| **M3.3 LAN — the actual product goal** | **next** |
-| M4 content — 3 archers, abilities, pickups, sound | planned |
-| M5 polish — profiling, thermals, release build | planned |
+| M3.2 match loop — timer, score, results | done |
+| M3.3 guns replace the bow; bots stop darting | done |
+| M3.4 the aim outlives the shot | done |
+| M3.5 spam fire, then automatic; five rounds, five-hit kill | done |
+| M3.6 tech debt — the frame budget is measured, at last | done |
+| **M3.7 LAN — the actual product goal** | **next** |
+| M4 content — 3 classes, abilities, pickups, sound | planned |
+| M5 polish — thermals, on-device profiling over a long session | planned |
 
 **Something fights back, and now a match ends.** Two minutes, first to six kills
 or whoever leads on the clock, then a results screen and a tap for the next
@@ -462,14 +483,24 @@ thing the project is actually for.
 
 ### Planned characters (M4)
 
-Differentiated by **weapon behaviour, not stat sliders** — three bows that play
-differently, rather than one bow with three damage numbers.
+Differentiated by **weapon behaviour, not stat sliders** — three guns that play
+differently, rather than one gun with three damage numbers.
+
+This is also where the debt from deleting the draw curve gets paid. Right now
+every shot in the game is identical, which is the honest cost of the trade
+recorded in [ADR-0022](decisions/0022-guns-supersede-archers.md); class
+asymmetry is what puts a decision back into shooting.
 
 | | Weapon | Ability |
 |---|---|---|
-| Ranger | Baseline. Full draw-reward, medium range, flat | Dash / roll |
-| Skirmisher | Rapid short bow, 3-arrow fan, short range | Caltrops |
-| Longbow | Slow arcing lob that flies **over walls**, AoE on landing | Burning zone |
+| Ranger | Baseline. Medium range, flat, the gun described above | Dash / roll |
+| Skirmisher | Rapid, short range, a 3-round spread per trigger pull | Caltrops |
+| Lobber | Slow arcing shell that flies **over walls**, AoE on landing | Burning zone |
+
+**The gun stats are read from a single global `Tuning` table today**, so this is
+a real structural change and not three JSON files: `Gun.speed()`, `damage()`,
+`capacity()` and the fire interval all have to become per-fighter without
+losing the property that a bot fires the same gun you do.
 
 ---
 
@@ -498,9 +529,9 @@ Things that are genuinely undecided, and what would settle them.
   magazine limits, damage-charged abilities, a match timer — but this needs real
   bots to test. **Settled by:** playtesting after `feat/bots`; the regen delay
   and rate are the first dials to turn.
-- ~~**Is `auto_repeat` on or off by default?**~~ **Answered in M3.6:** the gun is
-  automatic, full stop. The toggle is deleted rather than defaulted — an option
-  nobody picks is a second code path nobody tests.
+- ~~**Is the auto-repeat toggle on or off by default?**~~ **Answered in M3.6:**
+  the gun is automatic, full stop. The toggle is deleted rather than defaulted —
+  an option nobody picks is a second code path nobody tests.
 - **Does the arena read well?** Cover density, corridor widths, spawn placement
   are one text-file edit away. **Settled by:** playing it and saying what is
   wrong, rather than guessing at numbers.

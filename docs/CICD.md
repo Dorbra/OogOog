@@ -278,7 +278,16 @@ the map, the site returns 200.
   costs ~40 MB of *branch content* until it closes.
 - **Fork PRs get no preview.** `GITHUB_TOKEN` is read-only for them, so the
   publish job is skipped by an explicit guard rather than failing confusingly.
-- **The web build is a debug export** (36 MB wasm) — a slow first load on mobile
-  data. A release-mode export is on the tech-debt list.
+- **The web build is a debug export**, and it stays one. The wasm is 37.9 MB on
+  disk but **10.1 MB gzipped**, and a release export measured *bigger* — 40.1 MB
+  against 38.5 MB, identical once compressed. The tech-debt entry proposing a
+  release export to shrink the download rested on a number nobody had checked;
+  it would also have deleted the DBG panel from the web channel, which gates on
+  `OS.is_debug_build()`. **Confirmed on the wire** (run #62, PR #23): Pages
+  answers `content-encoding: gzip`, `content-length: 10225015`. So a phone
+  downloads **10.2 MB**, not 36, and the debt row overstated its own cost by
+  3.7x while proposing a change that would have made the artifact slightly
+  worse. The publish job prints those headers on every run, so the figure
+  cannot drift back into folklore.
 - **`dl.google.com` is blocked from the development container**, so there is no
   local Android SDK. Android export is CI-only and cannot be reproduced locally.

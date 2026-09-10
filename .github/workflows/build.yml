@@ -458,6 +458,19 @@ jobs:
             echo "  attempt ${attempt}: HTTP ${CODE}"
             if [ "$CODE" = "200" ]; then
               echo "site is live at ${URL}"
+              # What the phone ACTUALLY downloads. The debt list claimed the web
+              # build was a "36 MB wasm, slow first load on mobile data" and
+              # proposed a release export to fix it; the release export measured
+              # BIGGER (40.1 MB vs 38.5 MB, identical gzipped), and the wasm is
+              # 10.1 MB gzipped, so the whole item rested on a number nobody had
+              # checked. This is the one part of it that cannot be checked from
+              # the development container, because the egress proxy refuses
+              # dorbra.github.io — so CI reports it on every publish instead of
+              # it staying unknown for another four milestones (ADR-0027).
+              echo "--- what the browser gets for index.wasm ---"
+              curl -sS -I -H 'Accept-Encoding: gzip, br' --max-time 20 "${URL}index.wasm" \
+                | grep -iE '^(content-length|content-encoding|content-type):' \
+                || echo "  (no headers returned — not fatal, the page itself is live)"
               exit 0
             fi
             sleep 10

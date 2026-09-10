@@ -301,10 +301,11 @@ Two non-obvious details:
 |---|---|---|
 | The smoke test boots into the setup screen, where nothing simulates | It covers less than it did; live-sim coverage moved to the render captures, which force `Phase.LIVE` | Unclaimed — worth a flag that starts a match, if the boot test is ever asked to do more than catch a crash |
 | Sudden death has no clock of its own | A tie leans on kill rate, which is a slider. Pinned by a liveness test rather than left to chance | Unclaimed |
-| `BotController._nearest_cover()` scans every open cell, casting a ray each | Negligible on 24×14; linear in arena area | Unclaimed — revisit if arenas grow |
-| `Tuning.get_value()` called per-tick at ~50 sites | Dictionary lookup in hot paths | `chore/tech-debt` — cache on the `changed` signal |
-| `SimWorld._free_arrow()` is a linear scan of 150 | O(n) per shot | `chore/tech-debt` — free list |
-| Web export is a debug build (36 MB wasm) | Slow first load on mobile data | `chore/tech-debt` — release-mode export |
+| ~~`BotController._nearest_cover()` scans every open cell, casting a ray each~~ | ~~Negligible on 24×14~~ **It was 478 µs a call against a 226 µs mean tick, every tick a bot retreated** | **PAID.** Ring walk outward from the bot: 63 µs. Retreat ticks went 536 µs → 233 µs |
+| ~~`Tuning.get_value()` called per-tick at ~50 sites~~ | **Measured: 85.8 calls a tick at 0.34 µs = 29 µs, which is 0.17% of a 60 Hz frame** | **CLOSED, NOT PAID.** Caching in four files to save a sixth of one percent buys four new ways for a slider to go quietly dead (ADR-0021). `get_value()` now does one dictionary operation instead of two, which is the whole of it |
+| ~~`SimWorld._free_bullet()` is a linear scan of 150~~ | **Measured: invisible.** ~34 shots/s across six fighters, ~75 field reads each | **CLOSED, NOT PAID.** A free list adds an invariant that can be corrupted, to save nothing |
+| ~~Web export is a debug build (36 MB wasm)~~ | **The premise was false.** Pages serves it gzipped — measured on the wire at **10.2 MB**, not 36 — and the release export is *bigger* on disk (40.1 vs 38.5 MB), identical compressed | **CLOSED, NOT PAID.** Switching would also have deleted the DBG panel from the web channel, since it gates on `OS.is_debug_build()` |
+| `GridPath.find_path()` is 357 µs a call and five bots repath in lockstep | The worst tick in a match (4.1 ms) is several A\* runs landing together. Already rate-limited to 2.5/s per bot, so it is a spike, not a leak | Unclaimed — staggering each bot's repath phase would spread it, but it changes bot timing and therefore behaviour, which this branch deliberately would not do |
 | A missing data file degrades silently at runtime | `push_error` to a log nobody reads on a phone | Unclaimed; the CI gate makes it unreachable, which is not the same as impossible |
 
 ---

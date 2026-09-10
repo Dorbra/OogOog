@@ -663,6 +663,7 @@ func test_a_bot_stands_still_for_part_of_the_fight() -> void:
 	)
 	_restore()
 
+
 ## A reversal-rate gate was written here and deleted, which is worth recording.
 ##
 ## It counted direction reversals per second, expecting the old 1.2 s flip time
@@ -678,3 +679,127 @@ func test_a_bot_stands_still_for_part_of_the_fight() -> void:
 ##
 ## The stillness gate above is the one that actually holds: restoring either the
 ## always-on lateral term or the missing range deadband turns it red.
+
+
+## The rewrite of _nearest_cover(), pinned against the loop it replaced.
+##
+## This is the gate that makes a performance change safe to ship. The ring walk
+## visits cells in a completely different order from the row-major scan it
+## replaced, and the ONLY reason that is sound is that the search keeps a running
+## minimum, so the answer cannot depend on order. That is an argument; this is
+## the evidence.
+##
+## The reference implementation below is the old loop, copied verbatim rather
+## than paraphrased. If someone later "optimises" the ring walk into something
+## that skips a cell it should have checked, this goes red — which is the whole
+## failure mode a faster search invites.
+##
+## Ties are the interesting case and the reason the real function tracks an
+## index: this arena is symmetric, so two cover cells at exactly equal distance
+## genuinely happens, and the old loop kept whichever came first in row-major
+## order.
+func test_cover_search_is_unchanged_by_the_ring_walk() -> void:
+	_case = "cover search"
+	var world := _world()
+	var arena := world.arena
+	var bot := BotController.new(7)
+
+	var open: Array[Vector2] = []
+	for y in arena.rows:
+		for x in arena.cols:
+			if not arena.is_solid(x, y):
+				open.append(arena.cell_centre(x, y))
+
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20260910
+	var checked := 0
+	var found := 0
+
+	for i in 800:
+		var from: Vector2 = open[rng.randi_range(0, open.size() - 1)]
+		var threat: Vector2 = open[rng.randi_range(0, open.size() - 1)]
+		# Half the probes are nudged off the cell centre, exercising the sub-cell
+		# position the ring walk's distance bound has to tolerate. The other half
+		# sit EXACTLY on a centre, which is the only way an exact distance tie
+		# between two cover cells can arise on a symmetric map — and a tie is the
+		# one case where visiting order could change the answer.
+		if i % 2 == 0:
+			from += Vector2(rng.randf_range(-25.0, 25.0), rng.randf_range(-25.0, 25.0))
+
+		var fast: Vector2 = bot._nearest_cover(arena, from, threat)
+		var slow := _reference_nearest_cover(arena, from, threat)
+		checked += 1
+		if fast != Vector2.INF:
+			found += 1
+		if fast != slow:
+			_runner.check(
+				false,
+				_fail(
+					(
+						"ring walk returned %s, row-major scan %s, from %s threat %s"
+						% [fast, slow, from, threat]
+					)
+				)
+			)
+			return
+
+	_runner.check(checked == 800, _fail("expected 800 comparisons, made %d" % checked))
+	# Without this the test would pass on a function that returned INF every
+	# time, since both implementations would agree on nothing being anywhere.
+	_runner.check(
+		found > 100,
+		_fail("only %d of %d probes found any cover — the comparison is vacuous" % [found, checked])
+	)
+
+
+## The pre-ring-walk implementation, kept verbatim as the oracle.
+func _reference_nearest_cover(arena: Arena, from: Vector2, threat: Vector2) -> Vector2:
+	var best := Vector2.INF
+	var best_dist := INF
+	for y in arena.rows:
+		for x in arena.cols:
+			if arena.is_solid(x, y):
+				continue
+			var centre := arena.cell_centre(x, y)
+			var dist := from.distance_squared_to(centre)
+			if dist >= best_dist:
+				continue
+			if not arena.cast_segment(centre, threat)["hit"]:
+				continue
+			best_dist = dist
+			best = centre
+	return best
+
+
+## The bush list is cached on the Arena now, so it must contain exactly the
+## bushes — no more, no fewer — and must survive being asked for twice.
+func test_the_cached_bush_list_matches_the_grid() -> void:
+	_case = "bush cache"
+	var arena := Arena.new()
+
+	var expected: Array[Vector2] = []
+	for y in arena.rows:
+		for x in arena.cols:
+			if arena.cell(x, y) == Arena.Cell.BUSH:
+				expected.append(arena.cell_centre(x, y))
+
+	_runner.check(not expected.is_empty(), _fail("the arena has no bushes, so this proves nothing"))
+	_runner.check(
+		arena.bush_centres() == expected,
+		_fail("bush_centres() %s != grid scan %s" % [arena.bush_centres().size(), expected.size()])
+	)
+	# Built lazily, so the second call must not rebuild or double up.
+	_runner.check(
+		arena.bush_centres().size() == expected.size(),
+		_fail("bush_centres() grew on the second call — it is rebuilding")
+	)
+
+	var open_expected := 0
+	for y in arena.rows:
+		for x in arena.cols:
+			if not arena.is_solid(x, y):
+				open_expected += 1
+	_runner.check(
+		arena.open_centres().size() == open_expected,
+		_fail("open_centres() has %d, grid has %d" % [arena.open_centres().size(), open_expected])
+	)
