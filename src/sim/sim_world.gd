@@ -183,20 +183,9 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 		return
 
 	var dir := cmd.aim
-	if cmd.snap:
-		# The tap shot is the fully assisted option: it aims itself, and it
-		# LEADS. A tap that points at where the target already is cannot hit
-		# anything that is moving, which is the whole reason a five-year-old taps
-		# in the first place.
-		var target := nearest_visible_enemy(
-			shooter.position, Tuning.get_value("autoaim_radius"), shooter
-		)
-		dir = _intercept(shooter, target) if target != null else shooter.facing
 	if dir == Vector2.ZERO:
 		dir = shooter.facing
-
-	if not cmd.snap:
-		dir = assisted_aim(shooter, dir)
+	dir = assisted_aim(shooter, dir)
 
 	var bullet := _free_bullet()
 	if bullet == null:

@@ -104,18 +104,23 @@ projectile slow enough that a target drifted 1.14 cat-widths during its flight:
 So the draw curve is **deleted, not turned down**
 ([ADR-0022](decisions/0022-guns-supersede-archers.md)).
 
-### Tap to fire, and the aim stays put
+### Automatic: hold to fire
 
-- **Press** on the right half starts a gesture and fires **nothing**.
-- **Release** fires one round immediately: along the line the preview drew if
-  the drag passed `snap_max_drag`, auto-aimed and **leading** if it did not.
-- Classified on **drag distance alone**, against **one** threshold. A hold
-  threshold used to be half of the decision, and a second distance threshold
-  (`aim_min_drag`, 40 px) used to disagree with the first (26 px) — so a drag
-  between them fired along an aim nothing had updated.
+- **Hold** anywhere on the right half and the cat fires, continuously, along
+  your aim. **Let go** and it stops. That is the entire trigger.
+- **Drag while holding** to steer the fire. A drag under `aim_min_drag` (26 px)
+  is treated as thumb noise and leaves the aim where it was.
 - The rate limit lives in `Gun.consume()`, so the player and the bots are gated
-  by the same code and a fast tapper has shots **refused rather than queued** —
-  queueing would turn quick fingers back into lag.
+  by the same code — holding cannot beat the gun.
+- **There is no tap shot.** A quick press-and-release used to fire one
+  auto-aimed round at the nearest enemy; it is gone, so every bullet now comes
+  out of the same automatic path.
+
+**Firing is a state, not an event.** There is no shot signal: `TouchControls`
+exposes `is_firing`, and `SimWorld` reads it as `cmd.fire` once per simulation
+tick. The previous model relayed a per-rendered-frame signal into a fixed 60 Hz
+simulation through a one-tick pending flag — two clocks that agreed only by
+accident ([ADR-0026](decisions/0026-firing-is-a-state.md)).
 
 **The aim outlives the shot.** Once you have aimed, walking never turns you
 again: the cat holds the direction you last fired or pointed, and the dotted line
@@ -126,13 +131,6 @@ gun barrel swung away on every shot and there was no line of fire to keep
 
 Before the *first* aim, facing still follows travel, or six cats moonwalk out of
 their spawns at the start of a round.
-
-### Auto-repeat
-
-`auto_repeat` (default **off**): holding the right thumb keeps firing at the
-gun's own rate. Tap-to-fire is what was asked for and is what ships; this stays
-as a slider for when thumbs get tired, and it adds no timing of its own — the
-cooldown in `Gun` remains the single source of fire rate.
 
 ---
 
@@ -500,7 +498,9 @@ Things that are genuinely undecided, and what would settle them.
   magazine limits, damage-charged abilities, a match timer — but this needs real
   bots to test. **Settled by:** playtesting after `feat/bots`; the regen delay
   and rate are the first dials to turn.
-- **Is `auto_repeat` on or off by default?** Currently on. **Settled by:** thumbs.
+- ~~**Is `auto_repeat` on or off by default?**~~ **Answered in M3.6:** the gun is
+  automatic, full stop. The toggle is deleted rather than defaulted — an option
+  nobody picks is a second code path nobody tests.
 - **Does the arena read well?** Cover density, corridor widths, spawn placement
   are one text-file edit away. **Settled by:** playing it and saying what is
   wrong, rather than guessing at numbers.

@@ -11,17 +11,17 @@
     "min": 0.0,
     "value": 0.35
   },
+  "aim_min_drag": {
+    "group": "Controls",
+    "max": 120.0,
+    "min": 4.0,
+    "value": 26.0
+  },
   "aim_smoothing": {
     "group": "Controls",
     "max": 60.0,
     "min": 1.0,
     "value": 16.0
-  },
-  "auto_repeat": {
-    "group": "Bow",
-    "max": 1.0,
-    "min": 0.0,
-    "value": 0.0
   },
   "autoaim_radius": {
     "group": "Aim assist",
@@ -219,7 +219,7 @@
     "group": "Gun",
     "max": 12.0,
     "min": 1.0,
-    "value": 10.0
+    "value": 5.0
   },
   "match_countdown": {
     "group": "Match",
@@ -346,18 +346,6 @@
     "max": 90.0,
     "min": 0.0,
     "value": 14.0
-  },
-  "snap_max_drag": {
-    "group": "Aim assist",
-    "max": 120.0,
-    "min": 4.0,
-    "value": 26.0
-  },
-  "snap_max_hold": {
-    "group": "Aim assist",
-    "max": 1.0,
-    "min": 0.02,
-    "value": 0.14
   },
   "squash_amount": {
     "group": "Feel",

@@ -45,3 +45,4 @@ adapted: **Context → Decision → Consequences → Alternatives**.
 | [0023](0023-bots-must-stand-still.md) | A bot that never stands still cannot be read, or hit | Accepted |
 | [0024](0024-the-aim-outlives-the-shot.md) | The aim outlives the shot, and it is a fact about the fighter | Accepted |
 | [0025](0025-a-rate-is-not-a-count.md) | A rate is not a count — the kill cap was inside my own metric | Accepted |
+| [0026](0026-firing-is-a-state.md) | The gun is automatic; firing is a state, not an event | Accepted, supersedes the gesture in 0022 |

@@ -17,18 +17,14 @@ var move: Vector2 = Vector2.ZERO
 ## Desired aim direction, normalised (or zero when not aiming).
 var aim: Vector2 = Vector2.ZERO
 
-## True on the single tick a shot is fired.
+## True on every tick this actor is holding the trigger down.
 ##
-## There is no longer a power axis alongside it. Draw strength lived here until
-## the charge-up it represented turned out to BE the sluggishness — every shot
-## is now the same shot, and what varies between them will come from the class
-## you picked rather than how long you held your thumb down (ADR-0022).
+## Not an event any more. The gun went automatic, so this is a STATE that stays
+## true for as long as a thumb (or a bot's decision) is on the trigger, and
+## Gun.consume()'s cooldown decides which of those ticks actually produce a
+## bullet. Nothing here says how hard or how well — the power axis went with the
+## draw curve (ADR-0022) and the tap variant went with automatic fire.
 var fire: bool = false
-
-## True when the shot was a tap rather than an aimed drag: auto-aimed, and it
-## leads the target. No damage penalty — it is what a five-year-old uses.
-## Meaningful only on the tick `fire` is true.
-var snap: bool = false
 
 ## True on the single tick an ability is triggered. Unused until M4.
 var ability: bool = false
@@ -38,5 +34,4 @@ func clear() -> void:
 	move = Vector2.ZERO
 	aim = Vector2.ZERO
 	fire = false
-	snap = false
 	ability = false

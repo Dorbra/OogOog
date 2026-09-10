@@ -10,30 +10,32 @@ extends Node
 ## thumb crosses the screen midpoint mid-drag.
 ##
 ## Left half  -> floating joystick (movement).
-## Right half -> aim by drag, FIRE ON RELEASE. No charge.
+## Right half -> AUTOMATIC. Holding aims and fires; letting go stops.
 ##
-## Hold time used to be a power axis: 450 ms of thumb before any shot left the
-## bow. That read as lag, not commitment —
+## This is the third firing model and the simplest. A charge came first (450 ms
+## of thumb before anything left the bow: "sluggish"). Then tap-to-fire, one
+## round per press-release. Then:
 ##
-##     "the Arrow shooting is sluggish and cant be expected"
+##     "לדעתי נעבור למצב אוטומט, 5 כדורים"
+##     ("let's switch to automatic, 5 rounds")
 ##
-## — so releasing fires immediately and every shot is identical. The rate limit
-## lives in Gun, not here, so the player and the bots are gated by one piece of
-## code and a fast tapper simply has shots refused rather than queued. Queueing
-## would turn quick fingers back into lag, which is the thing being removed.
-
-## Emitted the instant a shot is fired. `snap` marks a tap: auto-aimed and
-## leading, with no damage penalty.
-signal shot_fired(aim: Vector2, snap: bool)
+## So there is no shot EVENT any more, and no signal. Firing is a STATE — the
+## thumb is down or it is not — read straight off this node once per simulation
+## tick. That deletes the whole pending-shot relay in main.gd along with the
+## frame-rate coupling it carried: a signal emitted per rendered frame fed a
+## simulation that ticks at a fixed 60 Hz, so the two only agreed by accident.
+##
+## Rate is enforced in Gun.consume(), the same code that limits the bots.
 
 const UNASSIGNED := -1
 
 var move_vector: Vector2 = Vector2.ZERO
 var aim_vector: Vector2 = Vector2.ZERO
 
-## True while a right-hand finger is down. The aim preview reads this — it is
-## the "clear line of fire" the shot will actually take.
-var is_aiming: bool = false
+## True while a right-hand finger is down, which now means BOTH aiming and
+## firing — they stopped being separate the moment the gun went automatic.
+## SimWorld reads it as `cmd.fire`; the view reads it to brighten the aim line.
+var is_firing: bool = false
 
 # Finger index -> origin, for each side. -1 means "no finger on this side".
 var _move_finger: int = UNASSIGNED
@@ -84,7 +86,7 @@ func _assign_finger(index: int, position: Vector2) -> void:
 		_aim_finger = index
 		_aim_origin = position
 		_aim_current = position
-		is_aiming = true
+		is_firing = true
 
 
 func _release_finger(index: int) -> void:
@@ -92,9 +94,8 @@ func _release_finger(index: int) -> void:
 		_move_finger = UNASSIGNED
 		move_vector = Vector2.ZERO
 	elif index == _aim_finger:
-		_emit_shot()
 		_aim_finger = UNASSIGNED
-		is_aiming = false
+		is_firing = false
 		# aim_vector DELIBERATELY SURVIVES.
 		#
 		# It used to be zeroed here, and Fighter.tick() falls through to the
@@ -116,33 +117,6 @@ func _handle_drag(event: InputEventScreenDrag) -> void:
 		_move_current = event.position
 	elif event.index == _aim_finger:
 		_aim_current = event.position
-
-
-## Classified on DRAG ALONE, not on how long the thumb rested.
-##
-## A hold threshold used to be half of this decision, which meant a careful
-## player lining up a shot got it silently reclassified as a tap the moment they
-## took too long. Distance is the whole question now: did you point somewhere, or
-## did you just tap?
-##
-## `snap_max_drag` is the ONLY threshold. There used to be a second one,
-## `aim_min_drag` at 40 px, below which the aim refused to update — while this
-## function called anything over 26 px an aimed shot. A drag landing in that
-## 26-40 px gap was fired as an aimed shot along an aim nothing had updated and
-## the preview had never drawn. One number makes that gap unrepresentable rather
-## than merely fixed.
-##
-## The shot goes along `aim_vector`, NOT along the raw drag. aim_vector is the
-## smoothed direction the preview actually drew; firing the raw drag meant a
-## quick flick left the bullet somewhere the dotted line had never pointed, which
-## is ADR-0019's lesson reintroduced by the PR that removed the charge. Preview
-## and shot are now the same value rather than two values that agree.
-func _emit_shot() -> void:
-	var drag := _aim_current - _aim_origin
-	var is_snap := drag.length() < Tuning.get_value("snap_max_drag")
-	# A tap carries no direction of its own — the caller auto-aims and leads it.
-	var dir := Vector2.ZERO if is_snap else aim_vector
-	shot_fired.emit(dir, is_snap)
 
 
 func _process(delta: float) -> void:
@@ -173,12 +147,6 @@ func _update_aim(delta: float) -> void:
 
 	_update_aim_direction(delta)
 
-	# Optional and OFF by default: the user asked for tap-to-fire. When it is on,
-	# emitting every frame is deliberate — Gun's cooldown is the single source of
-	# fire rate, so duplicating that timing here could only ever disagree with it.
-	if Tuning.get_value("auto_repeat") >= 0.5 and aim_vector != Vector2.ZERO:
-		shot_fired.emit(aim_vector, false)
-
 
 func _update_aim_direction(delta: float) -> void:
 	var offset := _aim_current - _aim_origin
@@ -186,10 +154,7 @@ func _update_aim_direction(delta: float) -> void:
 	# Below the threshold the drag vector is mostly thumb noise: a 10px offset
 	# carries the same authority as a 200px one once normalised, which is what
 	# made small movements swing the shot wildly. Hold the last direction.
-	#
-	# The SAME threshold _emit_shot() classifies on, deliberately: any drag long
-	# enough to count as an aimed shot is long enough to have moved the aim.
-	if offset.length() < Tuning.get_value("snap_max_drag"):
+	if offset.length() < Tuning.get_value("aim_min_drag"):
 		return
 
 	var target := offset.normalized()

@@ -171,31 +171,36 @@ func test_and_leading_it_properly_connects() -> void:
 	)
 
 
-func test_the_snap_shot_leads_too() -> void:
-	# The tap is what a five-year-old uses, and it goes through a different
-	# branch of _try_fire() than the assist does. Both had the same bug.
+## The tap shot that used to live here is gone with automatic fire, but the
+## thing it proved is not: the ASSIST leads, and it is now the only leading path
+## the player has. A nudge that pointed at where a cat already stands cannot hit
+## one that is moving, which was the whole bug in ADR-0020.
+func test_held_fire_is_assisted_toward_the_intercept() -> void:
 	var w := _world()
 	var target := _stage(w, minf(_reach() * 0.85, Tuning.get_value("autoaim_radius") * 0.9))
-
-	var cmd := InputCommand.new()
-	cmd.snap = true
-	cmd.aim = Vector2.RIGHT
-
-	var hit := [false]
-	w.hit.connect(func(_p: Vector2, _d: Vector2, _dmg: float) -> void: hit[0] = true)
 	var run := target.velocity
-	w._try_fire(w.player, cmd)
 
-	for _i in int(Tuning.get_value("bullet_lifetime") * 60.0) + 4:
-		target.velocity = run
-		target.prev_position = target.position
-		target.position += run * (1.0 / 60.0)
-		w._tick_bullets(1.0 / 60.0)
+	var straight := (target.position - w.player.position).normalized()
+	var assisted := w.assisted_aim(w.player, straight)
 
-	_runner.check(hit[0], _fail("a tap shot leads a running target"))
+	var intercept := Aim.intercept(
+		w.player.position, w.player.gun.speed(), target.position, run, 1.0, w.player.facing
+	)
 
-
-# ------------------------------------------------------- the solver in isolation
+	# Stated as a DISTANCE to the true intercept, not as the sign of an angle.
+	# The sign version was my first attempt and it compared two angles with no
+	# fixed relationship to each other, so it failed on correct code.
+	_runner.check(
+		straight.distance_to(intercept) > 0.0001,
+		_fail("the cat really is moving, so there is a lead to find")
+	)
+	_runner.check(
+		assisted.distance_to(intercept) < straight.distance_to(intercept),
+		(
+			_fail("the assist moves the shot toward the intercept: got %s, straight %s, want %s")
+			% [str(assisted), str(straight), str(intercept)]
+		)
+	)
 
 
 func test_lead_zero_reproduces_the_old_behaviour() -> void:

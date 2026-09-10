@@ -74,7 +74,7 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 
 	for i in frames:
 		if mode == "combat":
-			_drive_combat(main, i)
+			_drive_combat(main)
 			if not _hit_seen.is_empty():
 				_frames_since_hit += 1
 				if _frames_since_hit >= CAPTURE_DELAY:
@@ -219,7 +219,7 @@ func _stage_target(world) -> void:
 	push_warning("screenshot: found nowhere open to stage a target")
 
 
-func _drive_combat(main: Node, frame: int) -> void:
+func _drive_combat(main: Node) -> void:
 	var world = main.get("world")
 	var controls = main.get("controls")
 	if world == null or controls == null:
@@ -234,13 +234,11 @@ func _drive_combat(main: Node, frame: int) -> void:
 	# Point the cat at the target and keep a finger down, so the aim preview and
 	# the muzzle are both visible in the capture.
 	controls.aim_vector = to_target
-	controls.is_aiming = true
+	controls.is_firing = true
 	world.player.facing = to_target
 
-	# Fire on a cadence rather than once: the capture then lands with bullets in
-	# flight AND recent impacts, instead of depending on exact frame timing.
-	if frame > 10 and frame % 22 == 0:
-		controls.shot_fired.emit(to_target, false)
+	# The gun is automatic, so holding is all there is: is_firing above keeps it
+	# shooting and the capture lands with bullets in flight AND recent impacts.
 
 
 func _save(out: String) -> void:
