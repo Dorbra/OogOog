@@ -32,6 +32,21 @@ var prev_position: Vector2 = Vector2.ZERO
 var spawn_point: Vector2 = Vector2.ZERO
 
 var health := Health.new()
+
+## Which cat this is. Assigned by SimWorld._build_teams() before the first tick,
+## and it owns the gun's numbers and the ability — see FighterClass.
+##
+## A SETTER, so the class and the gun cannot drift apart. They are two facts
+## that must always agree, and the obvious spelling — a plain field plus a
+## remember-to-rebuild-the-gun line at each call site — is the same shape as the
+## respawn() bug below, which is a bug precisely because somebody has to
+## remember. Assigning this rebuilds the gun; there is no way to set one without
+## the other.
+var fighter_class: FighterClass = FighterClass.at(0):
+	set(value):
+		fighter_class = value
+		gun = Gun.new(value)
+
 var gun := Gun.new()
 
 ## Produces this fighter's InputCommand each tick. Null means nobody is driving,
@@ -71,7 +86,7 @@ func alive() -> bool:
 func tick(cmd: InputCommand, delta: float, arena: Arena) -> void:
 	prev_position = position
 	radius = Tuning.get_value("fighter_radius")
-	health.set_maximum(Tuning.get_value("fighter_health"))
+	health.set_maximum(Tuning.get_value("fighter_health") * fighter_class.health_mult)
 	health.tick(delta)
 	# Ahead of the death check on purpose: a corpse should stop being "revealed"
 	# rather than respawning still lit up from its last shot.
@@ -117,13 +132,20 @@ func _tick_dead(delta: float) -> void:
 		respawn()
 
 
+## A fresh gun, OF THE SAME CLASS.
+##
+## The class argument is the whole point of this line. A bare Gun.new() takes
+## the default class, so every Skirmisher would silently become a Ranger three
+## seconds into the match — right stats at the whistle, wrong stats for the rest
+## of the round, and nothing on screen to say so. Pinned by
+## test_classes.gd::test_respawning_keeps_your_class.
 func respawn() -> void:
 	health.revive()
 	velocity = Vector2.ZERO
 	position = spawn_point
 	prev_position = spawn_point
 	reveal_timer = 0.0
-	gun = Gun.new()
+	gun = Gun.new(fighter_class)
 
 
 func take_damage(amount: float) -> float:
@@ -148,7 +170,7 @@ func _apply_movement(move: Vector2, delta: float) -> void:
 		_decay_knockback(delta)
 		return
 
-	var target := move * Tuning.get_value("move_speed")
+	var target := move * Tuning.get_value("move_speed") * fighter_class.move_mult
 	var accel := Tuning.get_value("move_accel") * delta
 	velocity = velocity.move_toward(target, accel)
 

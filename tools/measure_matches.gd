@@ -45,6 +45,7 @@ var _tuning: Node
 var _sim_world: GDScript
 var _bot: GDScript
 var _command: GDScript
+var _fighter_class: GDScript
 
 
 func _initialize() -> void:
@@ -66,6 +67,7 @@ func _run() -> void:
 	_sim_world = load("res://src/sim/sim_world.gd")
 	_bot = load("res://src/ai/bot_controller.gd")
 	_command = load("res://src/sim/input_command.gd")
+	_fighter_class = load("res://src/sim/fighter_class.gd")
 
 	var runs := DEFAULT_RUNS
 	for arg in OS.get_cmdline_user_args():
@@ -77,6 +79,7 @@ func _run() -> void:
 			runs = int(arg)
 
 	_probe_free_range()
+	_report_matchups(runs)
 	_report(runs)
 	quit(0)
 
@@ -156,6 +159,44 @@ func _report(runs: int) -> void:
 			% ", ".join(lines.map(func(l: String) -> String: return "%s x%d" % [l, scorelines[l]]))
 		)
 	)
+
+
+## Every class against every class, which is the only question that decides
+## whether a class is a class or a mistake.
+##
+## A mirror match says how lethal a class is against its own kind; a cross match
+## says whether one of them simply wins. 60/40 is a match-up. 70/30 is a bug
+## with a name.
+##
+## EVERY slot is driven by a bot here, unlike the rest of this tool. The player
+## slot is normally idle, and that handicap depends on which class the slot would
+## have been — so it lands unevenly across the table and makes the rows
+## incomparable, which is exactly how the first reading of this table went wrong.
+## Symmetric sides mean 50% is the answer and anything else is the finding.
+func _report_matchups(runs: int) -> void:
+	var ids: Array = _fighter_class.all()
+	print("")
+	print("== class match-ups over %d matches each ==" % runs)
+	print(
+		"  (every slot is bot-driven here, so 50% is the answer and anything else is the finding)"
+	)
+	print("  %-14s %-14s %8s %8s %7s" % ["team 0", "team 1", "kills 0", "kills 1", "share"])
+
+	for a: String in ids:
+		for b: String in ids:
+			var score_a := 0
+			var score_b := 0
+			for run in runs:
+				var result := _play(run, a, b, true)
+				score_a += int(result["scores"][0])
+				score_b += int(result["scores"][1])
+			var total := maxi(score_a + score_b, 1)
+			print(
+				(
+					"  %-14s %-14s %8d %8d %6.0f%%"
+					% [a, b, score_a, score_b, 100.0 * float(score_a) / float(total)]
+				)
+			)
 
 
 ## How far you can shoot a running cat WITHOUT leading it.
@@ -257,11 +298,31 @@ func _straight_shot_hits(distance: float) -> bool:
 ## match resolves when one participant contributes nothing, which is close to
 ## what a five-year-old's first minute looks like, and it is the same shape as
 ## the floor pinned by test_match.gd::test_matches_actually_resolve.
-func _play(run: int) -> Dictionary:
+func _play(
+	run: int, team_a_class: String = "", team_b_class: String = "", drive_player: bool = false
+) -> Dictionary:
 	var world: Object = _sim_world.new()
 	var fighters: Array = world.fighters
+
+	# Forcing a whole team onto one class, for the match-up table. Assigning the
+	# class is enough: Fighter.fighter_class is a setter that rebuilds the gun,
+	# so there is no way to set one without the other and no tool-only path into
+	# the simulation.
+	for f in fighters:
+		var want: String = team_a_class if f.team == 0 else team_b_class
+		if want != "":
+			f.fighter_class = _fighter_class.get_class_by_id(want)
+
 	for i in range(1, fighters.size()):
 		fighters[i].controller = _bot.new(1000 + run * 131 + i * 7919)
+
+	# Driving the player slot means feeding SimWorld.tick() a command, NOT giving
+	# fighters[0] a controller. tick() reads the passed-in command for `player`
+	# and never consults its controller, so assigning one there does exactly
+	# nothing — which it did, silently, and produced a match-up table identical
+	# to the un-driven one down to the last kill. Four identical rows are what
+	# gave it away.
+	var player_bot: Object = _bot.new(999 + run * 131) if drive_player else null
 	world.match_state.phase = LIVE
 
 	var idle: Object = _command.new()
@@ -270,7 +331,10 @@ func _play(run: int) -> Dictionary:
 	var cap := int((_tuned("match_time_limit") + 180.0) * 60.0)
 
 	while world.match_state.phase == LIVE and ticks < cap:
-		world.tick(idle, DT)
+		var cmd: Object = idle
+		if player_bot != null:
+			cmd = player_bot.think(world.player, world, DT)
+		world.tick(cmd, DT)
 		ticks += 1
 		if first_kill < 0.0 and world.match_state.scores[0] + world.match_state.scores[1] > 0:
 			first_kill = world.match_state.elapsed
@@ -278,6 +342,7 @@ func _play(run: int) -> Dictionary:
 	var scores: Array = world.match_state.scores
 	var target := int(_tuned("match_target_kills"))
 	return {
+		"scores": scores,
 		"total": scores[0] + scores[1],
 		"line": "%d-%d" % [maxi(scores[0], scores[1]), mini(scores[0], scores[1])],
 		"by_target": target > 0 and maxi(scores[0], scores[1]) >= target,

@@ -91,11 +91,20 @@ func _build_teams() -> void:
 
 	team_size = clampi(int(Tuning.get_value("bot_team_size")), 1, MAX_TEAM_SIZE)
 
+	# Classes are dealt round-robin from the player's pick, and BOTH TEAMS GET
+	# THE SAME DEAL. Mirrored sides mean no match is decided by the draw, which
+	# matters more here than variety would: the players are 5 and 10, and losing
+	# to a match-up you did not choose and cannot see is the kind of unfairness
+	# that ends a session. It is also deterministic, which the render captures
+	# depend on.
+	var first := clampi(int(Tuning.get_value("player_class")), 0, maxi(FighterClass.count() - 1, 0))
+
 	for team in 2:
 		var spots: Array[Vector2] = team_a if team == 0 else team_b
 		for i in team_size:
 			var f := Fighter.new()
 			f.team = team
+			f.fighter_class = FighterClass.at(first + i)
 			f.spawn_point = spots[i % spots.size()]
 			f.position = f.spawn_point
 			f.prev_position = f.spawn_point
@@ -187,19 +196,8 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 		dir = shooter.facing
 	dir = assisted_aim(shooter, dir)
 
-	var bullet := _free_bullet()
-	if bullet == null:
-		return
-
 	var origin := shooter.position + dir * shooter.radius
-	bullet.launch(
-		origin,
-		dir,
-		shooter.gun.speed(),
-		shooter.gun.damage(),
-		Tuning.get_value("bullet_lifetime"),
-		shooter.team
-	)
+	_launch_fan(shooter, origin, dir)
 	# You shot that way, so you are facing that way — and you STAY facing that
 	# way, because nothing else moves facing any more.
 	#
@@ -215,6 +213,38 @@ func _try_fire(shooter: Fighter, cmd: InputCommand) -> void:
 	# invisible while killing people, which is not cover — it is a cheat.
 	shooter.reveal_timer = Tuning.get_value("reveal_time")
 	fired.emit(origin, dir)
+
+
+## One trigger pull, however many pellets the class fires.
+##
+## The fan is DETERMINISTIC: fixed angles across the arc, so point blank all
+## three of a Skirmisher's pellets connect and at range they open. It is not
+## random, and that is deliberate rather than lazy — random spread on a fast
+## flat bullet is exactly the "cant be expected" that got the bow deleted
+## (ADR-0022), and it would make every headless assertion about where a shot
+## goes unrepeatable as well.
+##
+## Note what is NOT here: a second Gun.consume(). The magazine was already spent
+## by the caller, once, for the whole fan. Spending a round per pellet would
+## empty a Skirmisher three times as fast as its magazine multiplier says, which
+## is the kind of thing that reads as "this class is terrible" rather than as a
+## bug.
+func _launch_fan(shooter: Fighter, origin: Vector2, dir: Vector2) -> void:
+	var gun := shooter.gun
+	for i in gun.pellets():
+		var bullet := _free_bullet()
+		# Pool exhausted. Firing what is left beats dropping the whole shot: a
+		# missing pellet is invisible, a missing trigger pull is not.
+		if bullet == null:
+			return
+		bullet.launch(
+			origin,
+			dir.rotated(gun.pellet_angle(i)),
+			gun.speed(),
+			gun.damage(),
+			gun.lifetime(),
+			shooter.team
+		)
 
 
 ## A narrow magnetic nudge on aimed shots, toward the INTERCEPT rather than

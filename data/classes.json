@@ -1,0 +1,71 @@
+{
+  "_comment": [
+    "A class is a set of MULTIPLIERS over the global tuning keys, not a stat",
+    "block of its own. Giving each class absolute values would take the DBG",
+    "panel from 63 sliders to ~190 and end the on-device tuning workflow that",
+    "ADR-0004 exists to protect: you cannot drag 'damage' and feel the result",
+    "when there are three of them. Every slider still moves the whole game, and",
+    "a class says only how it differs from that. See ADR-0028.",
+    "",
+    "'pellets' and 'spread_deg' are counts, not multipliers. The fan is",
+    "DETERMINISTIC - fixed angles across the arc, never random. Random spread on",
+    "a fast flat bullet is exactly the 'cant be expected' that got the bow",
+    "deleted (ADR-0022), and a fixed fan is both legible and repeatable.",
+    "",
+    "EVERY NUMBER BELOW WAS SET BY MEASUREMENT, not by argument. The sweep is",
+    "`tools/measure_matches.gd -- 20 match_target_kills=999`, which plays every",
+    "class against every class with all six slots bot-driven and reports the",
+    "kill share. The Skirmisher started at 30-33% of the kills against a Ranger",
+    "team - a class that did not work - and reached parity through four measured",
+    "corrections, in this order:",
+    "",
+    "  spread_deg 11 -> 46   at 11 degrees the outer pellets stayed inside a",
+    "                        29 px cat all the way to maximum range, so the",
+    "                        spread was decoration and the class was a weak",
+    "                        Ranger. 46 puts the whole fan on target inside",
+    "                        ~74 px and drops to the centre pellet beyond it.",
+    "  fire_interval -> 0.8  rapid, as the class was always described.",
+    "  move 1.18             it has to be able to close.",
+    "  health 1.55           the one that actually worked. Crossing 107 px of",
+    "                        open ground to reach its own effective range costs",
+    "                        0.6 s under 222 DPS - two thirds of a standard",
+    "                        health bar spent before it can shoot back.",
+    "",
+    "Final: cross match-ups 48% and 50%, against mirror baselines of 47% and",
+    "53%. Within noise of even in both directions."
+  ],
+  "order": [
+    "ranger",
+    "skirmisher"
+  ],
+  "classes": {
+    "ranger": {
+      "icon": 0,
+      "ability": "dash",
+      "pellets": 1,
+      "spread_deg": 0.0,
+      "damage": 1.0,
+      "fire_interval": 1.0,
+      "reach": 1.0,
+      "magazine": 1.0,
+      "reload": 1.0,
+      "speed": 1.0,
+      "move": 1.0,
+      "health": 1.0
+    },
+    "skirmisher": {
+      "icon": 1,
+      "ability": "caltrops",
+      "pellets": 3,
+      "spread_deg": 46.0,
+      "damage": 0.42,
+      "fire_interval": 0.8,
+      "reach": 0.62,
+      "magazine": 0.6,
+      "reload": 1.0,
+      "speed": 1.08,
+      "move": 1.18,
+      "health": 1.55
+    }
+  }
+}

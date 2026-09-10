@@ -245,7 +245,7 @@ func _do_engage(me: Fighter, world: SimWorld, target: Fighter) -> void:
 		return
 
 	var forward := to_target / distance
-	var preferred := Tuning.get_value("bot_preferred_range")
+	var preferred := preferred_range(me)
 
 	# Close if too far, back off if too near. Proportional rather than a hard
 	# toward/away, so a bot settles at its preferred range instead of jittering
@@ -548,6 +548,28 @@ func _nearest_bush(arena: Arena, from: Vector2, toward: Vector2) -> Vector2:
 
 
 # -------------------------------------------------------------------- skill
+
+
+## The distance this bot wants to hold, SCALED BY ITS OWN GUN.
+##
+## The global key is 170 px against a Ranger's 231 px reach — about three
+## quarters of it. Read raw, a Skirmisher (62% reach, so 143 px) would stand at
+## 170 and hold station beyond the range it can actually shoot: permanently
+## backing off, never firing, never still. That is not a tuning subtlety, it is
+## a class that does not work, and it showed up as a bot standing still 0% of a
+## fight.
+##
+## Scaling by the class multiplier keeps the same three-quarters relationship
+## for every gun, and it is what makes the Skirmisher a brawler that closes
+## rather than a Ranger that misses.
+## PUBLIC and static because the tests have to stage a bot at a distance it
+## actually wants to fight from, and computing that themselves is how three
+## fixtures ended up asserting against a station no bot stands at.
+static func preferred_range(me: Fighter) -> float:
+	return minf(
+		Tuning.get_value("bot_preferred_range") * me.fighter_class.reach_mult,
+		me.gun.effective_range() * 0.85
+	)
 
 
 ## Is this bot in the moving part of its strafe cycle?

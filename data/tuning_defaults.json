@@ -269,6 +269,12 @@
     "min": 0.0,
     "value": 52.0
   },
+  "player_class": {
+    "group": "Controls",
+    "max": 1.0,
+    "min": 0.0,
+    "value": 0.0
+  },
   "regen_delay": {
     "group": "Regen",
     "max": 10.0,
