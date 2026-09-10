@@ -18,6 +18,12 @@ var tint: Color = Palette.CAT_PLAYER
 var radius: float = 30.0
 var aim: Vector2 = Vector2.RIGHT
 var show_gun: bool = true
+
+## Which cat this is. The gun silhouette is drawn from it, and that silhouette
+## is the ONLY thing on screen that says what an enemy is carrying — a
+## five-year-old cannot read a class name, and colour is already spoken for by
+## the teams.
+var fighter_class: FighterClass = FighterClass.at(0)
 var flash: float = 0.0
 
 var _body: Sprite2D
@@ -114,6 +120,12 @@ func _draw_shadow() -> void:
 ## Drawn from primitives rather than an SVG for the same reason the bow was:
 ## there is no artist and no image editor in this workflow, and a shape built
 ## from the aim vector is always pointing exactly where the shot will go.
+##
+## THE SHAPE IS THE CLASS. A long thin barrel is a Ranger; a short fat one with
+## a spread of muzzles is a Skirmisher. That is the whole readout — there is no
+## text anywhere in this game and colour already means team — so the proportions
+## below are not decoration, they are the only way a player knows what is about
+## to shoot them. Drawn on every cat, not just yours, for exactly that reason.
 func _draw_gun() -> void:
 	if aim == Vector2.ZERO:
 		return
@@ -122,8 +134,12 @@ func _draw_gun() -> void:
 	var centre := aim * (radius * 1.15) + Vector2(0, -radius * 0.5)
 	var tangent := Vector2(-aim.y, aim.x)
 
-	var barrel_len := size * 1.45
-	var barrel_half := size * 0.19
+	# A spread gun is stubby and wide; a single-round gun is long and thin. The
+	# silhouette difference has to survive being 84 px tall on a phone in
+	# daylight, so it is proportion rather than detail.
+	var spread := fighter_class.pellets > 1
+	var barrel_len := size * (0.85 if spread else 1.45)
+	var barrel_half := size * (0.30 if spread else 0.19)
 	var muzzle := centre + aim * barrel_len
 
 	# Barrel: a quad along the aim, so it stays a rectangle at every angle
@@ -156,4 +172,14 @@ func _draw_gun() -> void:
 	)
 
 	# A bright muzzle tip, so which end the shot leaves from is never a question.
-	draw_circle(muzzle, size * 0.24, Palette.ARROW_TIP)
+	# One for a single round; a row of them for a fan, spaced across the barrel's
+	# width so the shape reads as "this thing sprays" without needing to be told.
+	if not spread:
+		draw_circle(muzzle, size * 0.24, Palette.ARROW_TIP)
+		return
+
+	var count := fighter_class.pellets
+	var pitch := barrel_half * 1.35
+	for i in count:
+		var offset := -pitch + pitch * 2.0 * float(i) / float(maxi(count - 1, 1))
+		draw_circle(muzzle + tangent * offset, size * 0.15, Palette.ARROW_TIP)

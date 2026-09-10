@@ -81,7 +81,12 @@ func _build() -> void:
 		# You are always ginger. Teammates and opponents carry the team colour,
 		# so "which of these is me" never depends on reading a team colour.
 		view.tint = Palette.CAT_PLAYER if is_player else _team_tint(f.team)
-		view.show_gun = is_player
+		view.fighter_class = f.fighter_class
+		# Every cat's gun is drawn now, not just yours. It used to be yours alone
+		# because the gun carried nothing but your own aim; with classes it also
+		# carries WHAT that cat is, and "the thing running at me is a shotgun"
+		# has to be readable without a word of text on screen.
+		view.show_gun = true
 		view.z_index = 2 if is_player else 1
 		add_child(view)
 		_fighter_views.append(view)
