@@ -51,3 +51,5 @@ adapted: **Context → Decision → Consequences → Alternatives**.
 | [0029](0029-abilities-charge-from-damage-dealt.md) | Abilities charge from damage dealt, not from a clock | Accepted |
 | [0030](0030-indirect-fire-must-telegraph.md) | Indirect fire must telegraph, or it is the off-screen complaint again | Accepted |
 | [0031](0031-release-is-the-shot.md) | Hold to aim, release to shoot — and each bullet counts | Accepted, supersedes the automatic fire in 0026 |
+| [0032](0032-the-network-is-a-command-producer.md) | The network is the fourth producer of an `InputCommand`; the simulation did not change | Accepted |
+| [0033](0033-the-host-owns-the-tuning.md) | The host owns the tuning — a client's sliders stop deciding the fight | Accepted, amends 0004 |

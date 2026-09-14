@@ -185,6 +185,7 @@ bash tests/test_publish_web.sh
 ./tools/render_test.sh "$GODOT" 90  build/shot.png   idle
 ./tools/render_test.sh "$GODOT" 240 build/combat.png combat
 ./tools/render_test.sh "$GODOT" 300 build/lob.png    lob    # a shell over a wall
+./tools/render_test.sh "$GODOT" 90  build/lobby.png  lobby  # alone / host / join
 ```
 
 **Then look at the screenshots.** They are the only way to see the game without a

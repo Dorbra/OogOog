@@ -71,6 +71,19 @@ var charge: float = 0.0
 ## SimWorld.can_see() is the only reader.
 var reveal_timer: float = 0.0
 
+## Where this fighter is on the device that is actually simulating it.
+##
+## Written only by Snapshot.apply(), read only by SimWorld.tick_replica(), and
+## completely inert on a device running its own simulation — which is every
+## device until somebody joins a game. It exists so a client has a target to
+## ease toward at 60 Hz rather than teleporting to each 30 Hz packet.
+##
+## A separate field rather than writing `position` directly, because `position`
+## is what the view interpolates FROM: overwriting it on packet arrival would
+## make every cat jump a third of a frame-pair and then stand still, which reads
+## as a stutter rather than as latency.
+var net_target: Vector2 = Vector2.ZERO
+
 ## Has this fighter ever been given an aim direction?
 ##
 ## Until it has, facing follows travel, which is what stops six cats moonwalking

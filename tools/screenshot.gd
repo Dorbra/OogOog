@@ -61,6 +61,23 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 	# would then time out having never fired a shot.
 	_force_phase(main.get("world"), mode)
 
+	if mode == "lobby":
+		# The one screen that is up BEFORE anything simulates, and the only one
+		# nothing else in this tool can reach: every other mode has to get past
+		# it, so every other capture is proof it was dismissed rather than proof
+		# it was drawn.
+		print("screenshot: holding the lobby")
+		for _i in frames:
+			await process_frame
+		await RenderingServer.frame_post_draw
+		_save(out)
+		return
+
+	# Every mode below this line needs the lobby out of the way: it is the first
+	# screen and it covers the game. Dismissing it through the "alone" path is
+	# also the right fixture — a capture must never open a socket.
+	_dismiss_lobby(main)
+
 	if mode == "lob":
 		await _run_lob(main, frames, out)
 		return
@@ -370,6 +387,19 @@ func _stage_behind_wall(world) -> bool:
 			)
 			return true
 	return false
+
+
+## Takes the lobby down the way a player playing alone would.
+##
+## Not by hiding it: the "alone" path is the one that also guarantees no socket
+## is open, and a capture that quietly started a server would leave a listening
+## port behind in CI. Calling the same handler a thumb calls keeps the fixture
+## honest about which path it took.
+func _dismiss_lobby(main: Node) -> void:
+	var lobby = main.get("_lobby")
+	if lobby == null:
+		return
+	lobby.call("_tap_choice", lobby.call("_choice_rect", 0).get_center())
 
 
 func _save(out: String) -> void:

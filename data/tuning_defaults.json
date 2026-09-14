@@ -317,6 +317,24 @@
     "min": 50.0,
     "value": 150.0
   },
+  "net_smoothing": {
+    "group": "Net",
+    "max": 60.0,
+    "min": 1.0,
+    "value": 18.0
+  },
+  "net_snapshot_hz": {
+    "group": "Net",
+    "max": 60.0,
+    "min": 5.0,
+    "value": 30.0
+  },
+  "net_stale_ticks": {
+    "group": "Net",
+    "max": 180.0,
+    "min": 2.0,
+    "value": 20.0
+  },
   "number_size": {
     "group": "Feel",
     "max": 64.0,

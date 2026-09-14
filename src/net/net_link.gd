@@ -30,24 +30,14 @@ enum Role { OFFLINE, HOST, CLIENT }
 const GAME_PORT := 7777
 const MAX_PEERS := 5
 
-## How often a peer publishes its position. 20 Hz rather than the simulation's
-## 60: three times fewer packets for movement nobody can see the difference in,
-## and the view interpolates between them anyway.
-const PUBLISH_HZ := 20.0
-
 ## How often each peer probes round-trip time.
 const PING_INTERVAL := 1.0
 
 var role: Role = Role.OFFLINE
 var last_error: String = ""
 
-## Remote peer id -> most recent position received.
-var peer_positions: Dictionary = {}
-
 var _peer: ENetMultiplayerPeer = null
-var _publish_accum: float = 0.0
 var _ping_accum: float = 0.0
-var _local_position: Vector2 = Vector2.ZERO
 
 ## Peer id -> last measured round-trip in milliseconds.
 var _pings: Dictionary = {}
@@ -137,7 +127,6 @@ func shutdown() -> void:
 	if mp != null:
 		mp.multiplayer_peer = null
 	role = Role.OFFLINE
-	peer_positions.clear()
 	_pings.clear()
 	status_changed.emit()
 	peers_changed.emit()
@@ -145,12 +134,6 @@ func shutdown() -> void:
 
 func online() -> bool:
 	return role != Role.OFFLINE
-
-
-## The position this device publishes. Called every frame by the view; actually
-## transmitted at PUBLISH_HZ.
-func set_local_position(pos: Vector2) -> void:
-	_local_position = pos
 
 
 func peer_ids() -> Array:
@@ -214,17 +197,6 @@ func _process(delta: float) -> void:
 
 	_tick_ping(delta)
 
-	_publish_accum += delta
-	var interval := 1.0 / PUBLISH_HZ
-	if _publish_accum < interval:
-		return
-	_publish_accum = 0.0
-
-	# unreliable_ordered: a dropped position packet is replaced by the next one
-	# 50 ms later. Retransmitting stale positions would add latency to fix
-	# something nobody can perceive.
-	_receive_position.rpc(_local_position)
-
 
 func _tick_ping(delta: float) -> void:
 	_ping_accum += delta
@@ -251,26 +223,13 @@ func _pong(sent_at: int) -> void:
 	_pings[mp.get_remote_sender_id()] = Time.get_ticks_msec() - sent_at
 
 
-@rpc("any_peer", "unreliable_ordered", "call_remote")
-func _receive_position(pos: Vector2) -> void:
-	var mp := _api()
-	if mp == null:
-		return
-	var sender := mp.get_remote_sender_id()
-	if sender == 0:
-		return
-	peer_positions[sender] = pos
-
-
 func _on_peer_connected(id: int) -> void:
-	peer_positions[id] = Vector2.ZERO
 	_pings[id] = -1
 	peers_changed.emit()
 	status_changed.emit()
 
 
 func _on_peer_disconnected(id: int) -> void:
-	peer_positions.erase(id)
 	_pings.erase(id)
 	peers_changed.emit()
 	status_changed.emit()

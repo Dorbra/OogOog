@@ -17,6 +17,7 @@ config/icon="res://icon.svg"
 Tuning="*res://src/debug/tuning.gd"
 Net="*res://src/net/net_link.gd"
 Beacon="*res://src/net/lan_beacon.gd"
+Lan="*res://src/net/net_game.gd"
 DebugOverlay="*res://src/debug/debug_overlay.gd"
 
 [debug]

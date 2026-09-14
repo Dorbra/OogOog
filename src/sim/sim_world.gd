@@ -157,6 +157,69 @@ func enemies_of(team: int) -> Array[Fighter]:
 	return out
 
 
+## Takes one snapshot from whoever is hosting. Returns false if it was refused.
+##
+## A thin pass-through to Snapshot.apply() so the codec stays pure and testable
+## without a SimWorld's whole graph — but the entry point lives here, because
+## "apply somebody else's state to this world" is a thing you do TO a world.
+func apply_snapshot(data: PackedFloat32Array) -> bool:
+	return Snapshot.apply(self, data)
+
+
+## What a CLIENT runs instead of tick(). It draws; it does not decide.
+##
+## Everything that makes an outcome — firing, damage, death, scoring, ability
+## charge, bots thinking — is absent by construction rather than by a flag. A
+## client cannot disagree with the host about who died, because it never forms
+## an opinion. That is what "host-authoritative, no prediction" means, and
+## expressing it as a SEPARATE FUNCTION rather than an `if is_client` inside
+## tick() is what keeps it true: there is no branch anybody can get wrong later.
+##
+## It runs at the same fixed 60 Hz as tick(), and that is the load-bearing part.
+## The view interpolates with Engine.get_physics_interpolation_fraction()
+## between `prev_position` and `position`, so as long as SOMETHING advances that
+## pair once per physics tick, every view file keeps working untouched — no
+## special case in game_view.gd, fx.gd, camera_rig.gd or cat_view.gd. Applying
+## 30 Hz packets straight into `position` instead would have meant teaching all
+## of them about the network.
+func tick_replica(delta: float) -> void:
+	# Toward the last known truth rather than onto it. Frame-rate independent,
+	# so a phone dropping to 40 fps eases at the same rate per second rather
+	# than lagging further behind the host the slower it gets.
+	var smoothing := maxf(Tuning.get_value("net_smoothing"), 0.0)
+	var k: float = 1.0 - exp(-smoothing * delta)
+
+	for f in fighters:
+		f.prev_position = f.position
+		f.position = f.position.lerp(f.net_target, k)
+		# Not health, not the gun, not the charge: those are snapshot values and
+		# nothing local may move them. Only the hit flash decays, because it is a
+		# 100 ms fade and waiting for the next packet to step it would make every
+		# hit strobe at the snapshot rate.
+		f.health.hit_flash = maxf(0.0, f.health.hit_flash - delta * 8.0)
+
+	# Bullets keep flying between packets along the velocity they were sent with.
+	# This is ARITHMETIC, not prediction: a bullet is a straight line at a known
+	# speed and both devices agree on all three numbers. It also cannot diverge
+	# in a way anybody sees, because the next snapshot replaces the whole set.
+	for b in bullets:
+		if not b.active:
+			continue
+		b.prev_position = b.position
+		b.position += b.velocity * delta
+		b.life -= delta
+		# Hidden, not detonated. A client that ran the blast would draw damage
+		# the host has not agreed to.
+		if b.life <= 0.0:
+			b.deactivate()
+
+	for h in hazards:
+		if h.active:
+			h.life = maxf(0.0, h.life - delta)
+			if h.life <= 0.0:
+				h.deactivate()
+
+
 func tick(cmd: InputCommand, delta: float) -> void:
 	match_state.tick(delta)
 

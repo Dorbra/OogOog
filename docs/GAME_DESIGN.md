@@ -519,7 +519,7 @@ is no image editor in this workflow.
 | M3.7 hold to aim, release to shoot — each bullet counts | done |
 | M4 classes — קלע and פורץ, one ability each, an icon picker | done |
 | M4.1 מרגמה — the shell that goes over the wall | done |
-| **M4.2 LAN — the actual product goal** | **next** |
+| **M4.2 LAN — three phones, one router** | **built, awaiting real hardware** |
 | M5 content — pickups, sound, a second arena | planned |
 | M6 polish — thermals, on-device profiling over a long session | planned |
 
@@ -528,28 +528,38 @@ minutes, first to ten kills or whoever leads on the clock, then a results screen
 and a tap for the next round. Team size and class are both picked from a row of
 cat cards before the whistle.
 
-**The honest summary is now different again: everyone is playing alone.** The
-whole point of this game is three people in one room, and until `feat/lan` lands
-the other five cats are bots. That is the last milestone between here and the
-thing the project is actually for.
+**"Everyone is playing alone" is no longer true.** The first screen asks whether
+this is one phone or three: a cat to play against bots, a cat with a plus to be
+the one everybody joins, a cat with a magnifier to go and find them. One device
+runs the fight and the others draw it
+([ADR-0032](decisions/0032-the-network-is-a-command-producer.md)). Anybody who
+does not turn up is a bot, which is the same rule that has filled every empty
+slot since M3.
 
-**And LAN has never been runnable**, which was found while planning it: the
-overlay has no Net tab, so the flow `docs/LAN_SPIKE.md` describes has never
-existed in a build. The four questions the spike raised have been "awaiting real
-hardware" for several milestones with no build in which they could be answered.
-That is the same failure this project has caught twice before — a document
-asserting a capability the artifact does not have — and it is now written down
-in the spike rather than discovered again.
+**What is NOT yet true is that it has worked on real phones.** Two headless
+processes exchange a whole round trip over loopback at 7 ms — a client's
+`InputCommand` reaching the host's simulation, and the host's state coming back
+as a snapshot — and that is every part of the path except the radio. Whether
+this household's router carries the traffic, whether broadcast discovery
+survives it, and what the real latency is are the three questions
+[LAN_SPIKE.md](LAN_SPIKE.md) has been unable to ask for five milestones, because
+the flow it described was never built. **It is built now**, and the DBG Net tab
+reports the ping with its own verdict, so the answer is a number to read out
+rather than a feeling.
+
+**The netcode design rests on that number.** Host-authoritative with no
+prediction and no rollback is the right shape at 5–20 ms and the wrong one at
+200: your own cat would answer your thumb late. That was assumed rather than
+measured, deliberately, and if the phones disagree the fix is contained —
+prediction on movement only, in one file, against a game that already works.
 
 ---
 
 ## 8. Planned, in order
 
-1. **`feat/lan`** — host, join, discovery. The three of you playing together,
-   which is the entire point. Blocked on nothing but work: the M3.0 spike proved
-   the transport on loopback at 7 ms, and the four questions it raised still need
-   two real phones on a real router to answer — **and a Net tab to answer them
-   from**, which does not exist yet. See [LAN_SPIKE.md](LAN_SPIKE.md).
+1. **Play it on the phones.** Not a branch — the one thing nothing here can do.
+   Three of the spike's four questions are answered; the rest need a router. See
+   [LAN_SPIKE.md](LAN_SPIKE.md) for exactly what to tap and what to read back.
 2. **`feat/pickups`** — the fast heal, demoted from survival necessity to tempo.
 3. **`feat/sound`** — the typed sim events ([ADR-0007](decisions/0007-typed-sim-events.md))
    were built to hang audio off, and nothing has yet.
