@@ -582,7 +582,7 @@ decision again, and the decision is *where you stand*.
 ([ADR-0028](decisions/0028-a-class-is-a-multiplier.md)). That is what keeps the
 on-device tuning workflow alive with three guns in play: every DBG slider still
 moves the whole game, and a class only says how it differs from that. A
-per-class table would have taken the panel from 62 keys to ~180 and made
+per-class table would have taken the panel from 76 keys to well over 200 and made
 "drag damage and feel the result" impossible.
 
 ---

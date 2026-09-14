@@ -11,12 +11,12 @@ extends Node
 ##
 ## For the spike every peer publishes its own position and everyone draws
 ## everyone. That is deliberately NOT the architecture the real game will use —
-## M3.3 makes the host authoritative, with clients sending InputCommand and the
+## M4.2 made the host authoritative, with clients sending InputCommand and the
 ## host broadcasting the simulation. Proving the transport first keeps the two
 ## questions separate: this one is about the network, that one is about the
 ## simulation.
 ##
-## Latency is the finding that decides M3.3's design. Under roughly 50 ms,
+## Latency is the finding that decides that design. Under roughly 50 ms,
 ## host-authoritative with no prediction and no rollback is sufficient, which
 ## removes an enormous amount of work. That is a claim worth measuring rather
 ## than assuming.

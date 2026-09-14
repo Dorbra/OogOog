@@ -1,7 +1,11 @@
 # OogOog
 
-A top-down archer brawler for Android. Short matches, twin-thumb controls,
-travelling arrows, out-of-combat health regen.
+A **3v3 top-down cat shooter for Android, played over local WiFi**. Short
+matches, twin-thumb controls, three classes, travelling bullets, out-of-combat
+health regen.
+
+Three people in one room, each on their own phone — that is what it is for, and
+everything else follows from it.
 
 Built with **Godot 4.7.1** (GDScript), **without a local development machine** —
 every build is produced by GitHub Actions.
@@ -92,9 +96,15 @@ Tap **DBG** (top-right) to open the debug overlay:
   they get committed as the new defaults.
 - **Log** — tails `user://logs/godot.log` with a copy button. This is the only way
   to see why something broke; there is no `adb logcat` without a PC.
-- **Info** — commit hash, device model, renderer, resolution, safe area, FPS.
+- **Info** — commit hash, device model, renderer, resolution, safe area, FPS,
+  and the worst frame seen since boot.
+- **Net** — role, peers, **worst ping**, last error, and a manual-address box for
+  when broadcast discovery is blocked by the router. The ping is the number the
+  netcode design rests on, so it prints its own verdict against 50 ms.
 
-The overlay is compiled out of release builds (`OS.is_debug_build()`).
+The overlay is present whenever `OS.is_debug_build()` **or** the `dbg` feature
+tag is set, so it survives a release web export — losing the tuning panel from
+the fast channel would cost more than the five megabytes it saves.
 
 ### 3. CI has to mean more than "it compiled"
 
@@ -107,7 +117,13 @@ Because nothing can be run locally by the person building this, every push runs:
 4. **[Boot smoke test](tools/smoke_test.sh)** — actually launches the main scene
    headless for 300 frames and fails on any engine or script error. This is the
    crash-on-launch tripwire; without it that costs a full install round trip to find.
-5. Only then: web export, Android export, publish.
+5. **Unit tests**, **six render captures**, **pack verification**, a
+   **two-process LAN loopback**, and a **UI interaction test** that delivers real
+   taps — because a capture proves the screen drew, not that anybody can touch it.
+6. Only then: web export, Android export, publish.
+
+Thirteen gates in all, each of which exists because something reached a device
+broken. [docs/CICD.md](docs/CICD.md) has the list and the incident behind each.
 
 ---
 
@@ -118,22 +134,29 @@ scenes/main.tscn      One node; everything else is built in code
 src/
   main.gd             Thin orchestrator — builds the world, pumps input
   sim/                Simulation. Never reads Input, never touches a sprite.
-                      input_command, sim_world, actor, bow, arrow, dummy, health
+                      input_command, sim_world, fighter, fighter_class, gun,
+                      bullet, hazard, health, aim, match_state, snapshot
+  ai/                 Producers of an InputCommand that are not thumbs:
+                      bot_controller, grid_path, remote_controller
+  net/                net_link (host/join/ping), lan_beacon (discovery),
+                      net_game (roster, seats, snapshots) — autoloaded as `Lan`
   arena/              arena.gd — ASCII grid: walls, bushes, spawns, collision
   input/              touch_controls — multi-touch routed by FINGER INDEX
-  view/               game_view, camera_rig, fx, hud, cat_view, terrain,
-                      palette, safe_area
-  debug/              tuning, debug_overlay, build_info
+  view/               game_view, camera_rig, fx, hud, match_hud, match_screens,
+                      lobby_screen, cat_view, terrain, palette, safe_area
+  debug/              tuning, debug_overlay, build_info, frame_stats
 assets/cats/          Hand-written SVG: tintable body + untinted face
 data/
   arenas/arena_01.txt     the map, as text — edit it to change the level
   arenas/legend.json      symbol meanings and cell size
+  classes.json            the three classes, as multipliers over the keys below
   tuning_defaults.json    every feel parameter, live-adjustable on device
   build_stamp.json        overwritten by CI so the app identifies its own commit
 tests/                Run headless via tools/run_tests.gd
 tools/                smoke_test.sh, render_test.sh, screenshot.gd, run_tests.gd,
+                      verify_ui.sh, verify_pack.sh, measure_matches.gd,
+                      measure_frame.gd, net_probe.gd,
                       publish_web.sh — pushes the web build to `gh-pages`
-                      verify_pack.sh — the EXPORT really contains its data files
 ```
 
 ### Architecture
@@ -143,8 +166,10 @@ in `_physics_process` at a fixed 60 Hz; `view/` interpolates it for display and
 subscribes to typed events (`hit`, `killed`, `fired`) rather than polling state.
 
 That split is why the combat logic is unit-testable headlessly, and it is what
-makes same-WiFi multiplayer possible later without a rewrite — the network would
-simply become a third producer of `InputCommand`, alongside thumbs and bot AI.
+made same-WiFi multiplayer possible **without a rewrite**: the network became a
+fourth producer of `InputCommand` alongside thumbs, bot AI and nobody-at-all, and
+`SimWorld.tick()` did not change by a single line
+([ADR-0032](docs/decisions/0032-the-network-is-a-command-producer.md)).
 
 ## Conventions
 
@@ -157,7 +182,7 @@ simply become a third producer of `InputCommand`, alongside thumbs and bot AI.
 - **Text-first authoring.** Arenas are ASCII grids parsed at runtime rather than
   hand-authored `.tscn` tilemap data, because they have to be edited and reviewed
   without an editor.
-- **Pool anything spawned in combat** — arrows, particles, damage numbers.
+- **Pool anything spawned in combat** — bullets, hazards, particles, damage numbers.
   GDScript allocation churn shows up as frame hitches.
 
 ## Documentation
@@ -168,7 +193,7 @@ Full engineering documentation lives in **[docs/](docs/)**:
 |---|---|
 | [Architecture](docs/ARCHITECTURE.md) | Layers, module map, the frame, invariants |
 | [Game design](docs/GAME_DESIGN.md) | Pillars, mechanics, roadmap, what was refused |
-| [CI/CD](docs/CICD.md) | Pipeline, the eleven gates, publishing, incident log |
+| [CI/CD](docs/CICD.md) | Pipeline, the thirteen gates, publishing, incident log |
 | [No-PC workflow](docs/NO_PC_WORKFLOW.md) | The constraint that shapes everything else |
 | [Decisions (ADRs)](docs/decisions/) | One file per decision: why, what it cost, what was rejected |
 

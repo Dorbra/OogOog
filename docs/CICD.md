@@ -80,14 +80,16 @@ cheapest and most likely to fail first.
 | 2 | **`gdformat --check` + `gdlint`** | Style drift; `gdlint` also catches real ordering bugs |
 | 3 | **`--import`** — build the `.godot/` cache | The classic green-build-broken-artifact. Skipping this is *the* canonical Godot CI mistake |
 | 4b | **UI interaction test** — `tools/verify_ui.sh` delivers real taps to the real scene | A control that draws but cannot be touched. A build shipped stuck on its first screen with every other gate green ([ADR-0019](decisions/0019-appearance-is-not-behaviour.md)) |
-| 4 | **Unit tests** — 370 assertions, `tools/run_tests.gd` | Sim logic regressions. A file that fails to compile, or a test that asserts nothing, is a failure — not a smaller total nobody notices |
+| 4 | **Unit tests** — 17 test files, `tools/run_tests.gd` | Sim logic regressions. A file that fails to compile, or a test that asserts nothing, is a failure — not a smaller total nobody notices |
 | 5 | **Boot smoke test** — 300 headless frames, fails on any engine or script error | Crash-on-launch, which otherwise costs a full install round trip to discover |
 | 6 | **Publish logic tests** — 18 assertions, `tests/test_publish_web.sh` | A root publish deleting open PRs' previews; `gh-pages` history growing unbounded |
-| 7 | **Render tests** — idle + combat screenshots under Xvfb | Anything visual. `_draw()` is never called headless, so without this the whole rendering path is unverified |
-| 8 | **Pack verification** — `tools/verify_pack.sh` | **Data files missing from the exported artifact** |
-| 9 | Web export | A broken web build |
-| 10 | Android export | A broken APK |
-| 11 | **APK arena check** | The Android preset drifting from the Web preset |
+| 7 | **Docs link check** — `tests/test_docs_links.sh` | A relative link rotting when a file moves. Documentation that lies is worse than none, because it is believed |
+| 8 | **LAN loopback** — two headless processes, `tests/test_net_loopback.sh` | The whole round trip except the radio: a client's `InputCommand` reaching the host's simulation and its state coming back as a snapshot |
+| 9 | **Render tests** — six captures under Xvfb: idle, combat, setup, results, a shell in flight, the lobby | Anything visual. `_draw()` is never called headless, so without this the whole rendering path is unverified |
+| 10 | **UI interaction** — `tools/verify_ui.sh` delivers real taps | A screen that DRAWS but cannot be touched. This shipped once: a Control on a CanvasLayer had size (0, 0), the game was stuck on its first screen, and every capture looked perfect (ADR-0019) |
+| 11 | **Pack verification** — `tools/verify_pack.sh` | **Data files missing from the exported artifact** |
+| 12 | Web export, Android export | A broken web build or APK |
+| 13 | **APK arena check** | The Android preset drifting from the Web preset |
 
 Gates 6, 8 and 11 exist because of bugs that reached a real device. Their stories
 are in §7.

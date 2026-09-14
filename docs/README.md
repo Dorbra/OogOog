@@ -6,9 +6,9 @@ Start here.
 |---|---|
 | **[ARCHITECTURE.md](ARCHITECTURE.md)** | How the code is structured, what depends on what, and which invariants break things quietly when violated |
 | **[GAME_DESIGN.md](GAME_DESIGN.md)** | What the game is, which mechanics serve that, what is planned, and what has been deliberately refused |
-| **[CICD.md](CICD.md)** | The pipeline, the eleven gates and what each one catches, how publishing works, and the incident log |
+| **[CICD.md](CICD.md)** | The pipeline, the thirteen gates and what each one catches, how publishing works, and the incident log |
 | **[NO_PC_WORKFLOW.md](NO_PC_WORKFLOW.md)** | The constraint that shapes every other decision: there is no development machine |
-| **[LAN_SPIKE.md](LAN_SPIKE.md)** | M3.0 — the local-multiplayer experiment, how to run it on two phones, and what its four answers decide |
+| **[LAN_SPIKE.md](LAN_SPIKE.md)** | M3.0, closed by M4.2 — three of its four questions answered in code; the fourth is the real latency, and it names exactly what to tap on two phones and what to read back |
 | **[decisions/](decisions/)** | ADRs — one file per decision, with the reasoning, the cost, and what was rejected |
 
 Plus, at the repo root: **[CONTRIBUTING.md](../CONTRIBUTING.md)** for the branch
@@ -41,7 +41,7 @@ rejected and why, which is usually the part being re-derived.
    a ~6-minute feedback loop survivable.
 2. **The simulation never reads input and never touches a sprite.** It is why
    combat logic is testable at all without a display.
-3. **No feel constant is a literal.** 49 tuning keys, adjustable on the phone at
+3. **No feel constant is a literal.** 76 tuning keys, adjustable on the phone at
    runtime, because "does this feel right" is answered with thumbs.
 4. **Verify the artifact, not the process.** A green run says the pipeline
    worked. It says nothing about whether the thing a player installs contains a
