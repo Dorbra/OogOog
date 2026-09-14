@@ -155,6 +155,30 @@
     "min": 1.0,
     "value": 9.0
   },
+  "burning_zone_damage_per_second": {
+    "group": "Abilities",
+    "max": 200.0,
+    "min": 5.0,
+    "value": 42.0
+  },
+  "burning_zone_radius": {
+    "group": "Abilities",
+    "max": 260.0,
+    "min": 30.0,
+    "value": 112.0
+  },
+  "burning_zone_range": {
+    "group": "Abilities",
+    "max": 400.0,
+    "min": 40.0,
+    "value": 150.0
+  },
+  "burning_zone_time": {
+    "group": "Abilities",
+    "max": 20.0,
+    "min": 1.0,
+    "value": 5.0
+  },
   "caltrops_damage_per_second": {
     "group": "Abilities",
     "max": 200.0,
@@ -307,7 +331,7 @@
   },
   "player_class": {
     "group": "Controls",
-    "max": 1.0,
+    "max": 2.0,
     "min": 0.0,
     "value": 0.0
   },

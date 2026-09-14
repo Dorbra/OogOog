@@ -45,7 +45,12 @@ func test_every_shot_is_the_same_shot() -> void:
 ## otherwise allow: an empty magazine in five frames.
 func test_the_gun_will_not_fire_faster_than_its_interval() -> void:
 	var gun := Gun.new()
-	var interval := Tuning.get_value("fire_interval")
+	# THIS GUN's interval, not the global key. They were the same number while
+	# every class multiplied it by 1.0; the moment the Ranger went to 0.9 the
+	# "just short of the interval" tick landed exactly ON it and this failed on
+	# correct code. Fifth instance of the same mistake in this repo: a fixture
+	# that derives from a global measures the assumption, not the code.
+	var interval := gun.fire_interval()
 
 	_runner.check(gun.consume(), _fail("the first shot fires"))
 	_runner.check(not gun.can_fire(), _fail("and the gun is immediately on cooldown"))
@@ -82,7 +87,7 @@ func test_magazine_depletes_and_blocks() -> void:
 	# 1.1 s reload, so the loop would hand rounds back and this would quietly
 	# become a test of the reload instead of the block.
 	gun.magazine = 0
-	gun.tick(Tuning.get_value("fire_interval"))
+	gun.tick(gun.fire_interval())
 	_runner.check(not gun.can_fire(), _fail("an empty magazine cannot fire"))
 	_runner.check(not gun.consume(), _fail("consume on empty returns false"))
 	_runner.check(gun.magazine == 0, _fail("the magazine never goes negative"))
@@ -90,16 +95,16 @@ func test_magazine_depletes_and_blocks() -> void:
 
 func test_magazine_refills_over_time() -> void:
 	var gun := Gun.new()
-	var refill := Tuning.get_value("reload_time")
+	var refill := gun.reload_time()
 	gun.consume()
-	gun.tick(Tuning.get_value("fire_interval"))
+	gun.tick(gun.fire_interval())
 	gun.consume()
 	var after_use := gun.magazine
 
 	# Just short of one reload period from here: nothing yet. The fire_interval
 	# already ticked above is deliberately small against reload_time, and the
 	# 0.9/0.2 split leaves room for it.
-	gun.tick(refill * 0.9 - Tuning.get_value("fire_interval"))
+	gun.tick(refill * 0.9 - gun.fire_interval())
 	_runner.check(gun.magazine == after_use, _fail("no round before the reload period elapses"))
 
 	gun.tick(refill * 0.2)
@@ -266,7 +271,7 @@ func test_a_held_trigger_produces_the_guns_rate_and_no_more() -> void:
 		w.player.gun.magazine = w.player.gun.capacity()
 		w.tick(cmd, DT)
 
-	var allowed := int(1.0 / Tuning.get_value("fire_interval")) + 1
+	var allowed := int(1.0 / w.player.gun.fire_interval()) + 1
 	_runner.check(shots.size() >= 1, _fail("holding the trigger fires at all"))
 	_runner.check(
 		shots.size() <= allowed,

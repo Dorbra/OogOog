@@ -61,6 +61,10 @@ func _run(main: Node, frames: int, out: String, mode: String) -> void:
 	# would then time out having never fired a shot.
 	_force_phase(main.get("world"), mode)
 
+	if mode == "lob":
+		await _run_lob(main, frames, out)
+		return
+
 	if mode == "combat":
 		var world = main.get("world")
 		if world == null:
@@ -244,6 +248,128 @@ func _drive_combat(main: Node) -> void:
 	# are both in frame.
 	controls.set("_fire_pressed", true)
 	controls.set("_fire_was_tap", false)
+
+
+## Captures a SHELL IN THE AIR, over a wall, with its landing ring on the ground.
+##
+## The other combat mode captures on impact, which is the wrong moment for this
+## class: what has to be looked at is the promise ADR-0030 makes — that indirect
+## fire is telegraphed — and that promise is only on screen between the muzzle
+## and the ground. An impact frame proves the damage worked and says nothing
+## about whether anybody could have seen it coming.
+##
+## It rebuilds the world through the SAME path the setup screen uses, rather
+## than reaching in and swapping a gun, so what is captured is what a player
+## picking the third card would actually get.
+func _run_lob(main: Node, frames: int, out: String) -> void:
+	var arcing := _arcing_index()
+	if arcing < 0:
+		push_error("screenshot: no arcing class to capture")
+		quit(1)
+		return
+
+	var node := root.get_node_or_null("/root/Tuning")
+	if node == null:
+		push_error("screenshot: Tuning autoload missing, cannot pick a class")
+		quit(1)
+		return
+	node.set_value("player_class", float(arcing))
+	main.call("_rebuild_world")
+	await process_frame
+
+	var world = main.get("world")
+	if world == null:
+		push_error("screenshot: main scene exposes no `world` to drive")
+		quit(1)
+		return
+
+	_disarm_bots(world)
+	_force_phase(world, "combat")
+
+	if not _stage_behind_wall(world):
+		push_error("screenshot: found nowhere to stage a shot over a wall")
+		quit(1)
+		return
+
+	# Fires ONE shell and counts frames from the launch, rather than capturing on
+	# an event: there is no signal for "halfway down", and the whole point is the
+	# part of the flight where nothing has happened yet.
+	var flight := int(world.player.gun.lifetime() * 60.0)
+	var at_frame := int(float(flight) * 0.6)
+	var since := -1
+
+	for i in frames:
+		_drive_combat(main)
+		if since < 0:
+			for b in world.bullets:
+				if b.active and b.arcing:
+					since = 0
+					break
+		elif since >= 0:
+			since += 1
+			if since >= at_frame:
+				print(
+					"screenshot: shell captured IN FLIGHT, %d of %d frames down" % [since, flight]
+				)
+				await RenderingServer.frame_post_draw
+				_save(out)
+				return
+		await process_frame
+
+	print("screenshot: lob capture NEVER SAW A SHELL")
+	push_warning("screenshot: no arcing shell launched in %d frames" % frames)
+	await RenderingServer.frame_post_draw
+	_save(out)
+
+
+## Index into the class order of the first class that flies over walls.
+##
+## By the flag, not by name: a class list is data (ADR-0005) and hard-coding
+## "lobber" here would make this capture silently pick the wrong cat the day the
+## table is reordered or renamed.
+func _arcing_index() -> int:
+	var order: Array = FighterClass.all()
+	for i in order.size():
+		if FighterClass.get_class_by_id(order[i]).arcing:
+			return i
+	return -1
+
+
+## Puts one enemy on the far side of stone, inside the shell's reach.
+##
+## The opposite requirement to _stage_target(): that one needs a CLEAR line and
+## this one needs a blocked one, because a shell landing in the open proves
+## nothing a flat round could not.
+func _stage_behind_wall(world) -> bool:
+	var target = world.nearest_enemy(world.player.position, 100000.0, world.player)
+	if target == null:
+		return false
+
+	var from: Vector2 = world.player.position
+	var reach: float = world.player.gun.reach()
+	for fraction in [0.8, 0.65, 0.9, 0.5]:
+		var distance: float = reach * fraction
+		for step in 48:
+			var angle := TAU * float(step) / 48.0
+			var spot: Vector2 = from + Vector2(cos(angle), sin(angle)) * distance
+			var cell: Vector2i = world.arena.cell_at(spot)
+			if world.arena.is_solid(cell.x, cell.y):
+				continue
+			# Stone ON the line is the whole fixture. A clear shot here would
+			# capture an ordinary lob and the wall would be untested.
+			if not world.arena.cast_segment(from, spot)["hit"]:
+				continue
+			target.position = spot
+			target.prev_position = spot
+			target.spawn_point = spot
+			print(
+				(
+					"screenshot: staged target BEHIND STONE at %s (%.0fpx, %.0f%% of a %.0fpx shell)"
+					% [str(spot), distance, fraction * 100.0, reach]
+				)
+			)
+			return true
+	return false
 
 
 func _save(out: String) -> void:

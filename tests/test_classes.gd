@@ -311,3 +311,256 @@ func test_the_picker_decides_what_the_player_fights_as() -> void:
 			_fail("picking %d gave the player a %s" % [index, w.player.fighter_class.id])
 		)
 	_restore()
+
+
+# ------------------------------------------------------------------- arcing
+
+
+func _arcing_class() -> FighterClass:
+	for class_id in FighterClass.all():
+		var cls := FighterClass.get_class_by_id(class_id)
+		if cls.arcing:
+			return cls
+	return null
+
+
+## Finds an open cell with stone directly to its right, and a clear cell beyond.
+## Returns [from, beyond] or an empty array when the map offers no such spot.
+func _wall_sandwich(arena: Arena) -> Array:
+	for y in arena.rows:
+		for x in arena.cols:
+			if arena.is_solid(x, y) or not arena.is_solid(x + 1, y):
+				continue
+			if not arena.in_grid(x + 2, y) or arena.is_solid(x + 2, y):
+				continue
+			return [arena.cell_centre(x, y), arena.cell_centre(x + 2, y)]
+	return []
+
+
+func test_a_shell_flies_over_a_wall_that_stops_a_bullet() -> void:
+	_case = "over the wall"
+	var arcing := _arcing_class()
+	_runner.check(arcing != null, _fail("some class arcs"))
+	if arcing == null:
+		return
+
+	var w := _world()
+	var spot := _wall_sandwich(w.arena)
+	_runner.check(not spot.is_empty(), _fail("the arena has open-wall-open in a row"))
+	if spot.is_empty():
+		return
+
+	var from: Vector2 = spot[0]
+	var beyond: Vector2 = spot[1]
+
+	# Asserted in BOTH directions. "The shell got through" alone would pass on a
+	# build where the wall cast was broken for every class, which is a far worse
+	# bug than the one this is guarding.
+	_runner.check(
+		not _shell_reaches(w, FighterClass.at(0), from, beyond),
+		_fail("a flat round is stopped by the stone")
+	)
+	_runner.check(_shell_reaches(w, arcing, from, beyond), _fail("and an arcing shell is not"))
+
+
+## Fires one round of `cls` from `from` toward `beyond` and says whether anything
+## of it survived past the wall.
+func _shell_reaches(w: SimWorld, cls: FighterClass, from: Vector2, beyond: Vector2) -> bool:
+	for b in w.bullets:
+		b.deactivate()
+
+	var gun := Gun.new(cls)
+	var dir := (beyond - from).normalized()
+	var bullet: Bullet = w._free_bullet()
+	bullet.launch(
+		from, dir, gun.speed(), gun.damage(), gun.lifetime(), 0, 0, cls.arcing, cls.splash_radius
+	)
+
+	var target := from.distance_to(beyond)
+	for _i in int(gun.lifetime() * 60.0) + 4:
+		w._tick_bullets(DT)
+		if not bullet.active:
+			return false
+		if from.distance_to(bullet.position) >= target:
+			return true
+	return false
+
+
+# ------------------------------------------------------------------- splash
+
+
+func test_a_landing_shell_damages_a_radius_and_falls_off_with_distance() -> void:
+	_case = "splash"
+	var arcing := _arcing_class()
+	if arcing == null:
+		return
+	_runner.check(arcing.splash_radius > 0.0, _fail("the arcing class has a blast radius"))
+
+	var w := _world()
+	var centre := w.arena.open_centres()[w.arena.open_centres().size() / 2]
+
+	var enemies := w.enemies_of(0)
+	_runner.check(enemies.size() >= 2, _fail("two enemies to stand at two distances"))
+	if enemies.size() < 2:
+		return
+
+	var near: Fighter = enemies[0]
+	var far: Fighter = enemies[1]
+	near.position = centre
+	# Just inside the rim, so it is a graze rather than a miss.
+	far.position = centre + Vector2(arcing.splash_radius + far.radius - 6.0, 0.0)
+
+	var near_before := near.health.current
+	var far_before := far.health.current
+
+	var gun := Gun.new(arcing)
+	var bullet: Bullet = w._free_bullet()
+	bullet.launch(
+		centre, Vector2.RIGHT, gun.speed(), gun.damage(), 0.0, 0, 0, true, arcing.splash_radius
+	)
+	bullet.position = centre
+	w._detonate(bullet)
+
+	var near_hurt := near_before - near.health.current
+	var far_hurt := far_before - far.health.current
+
+	_runner.check(near_hurt > 0.0, _fail("the cat at the centre was hurt (%.1f)" % near_hurt))
+	_runner.check(far_hurt > 0.0, _fail("the cat at the rim was too (%.1f)" % far_hurt))
+	# The falloff IS the mechanic: full damage across the circle would make
+	# position inside the blast meaningless.
+	_runner.check(
+		far_hurt < near_hurt * 0.6,
+		_fail("and the rim took far less (%.1f vs %.1f)" % [far_hurt, near_hurt])
+	)
+
+
+func test_a_blast_never_hurts_your_own_side() -> void:
+	_case = "splash friendly fire"
+	var arcing := _arcing_class()
+	if arcing == null:
+		return
+
+	var w := _world()
+	var dropper := w.player
+	var mate: Fighter = null
+	for f in w.fighters:
+		if f != dropper and f.team == dropper.team:
+			mate = f
+			break
+	_runner.check(mate != null, _fail("there is a teammate to stand in it"))
+	if mate == null:
+		return
+
+	mate.position = dropper.position
+	var before := mate.health.current
+
+	var gun := Gun.new(arcing)
+	var bullet: Bullet = w._free_bullet()
+	bullet.launch(
+		dropper.position,
+		Vector2.RIGHT,
+		gun.speed(),
+		gun.damage(),
+		0.0,
+		dropper.team,
+		dropper.get_instance_id(),
+		true,
+		arcing.splash_radius
+	)
+	bullet.position = dropper.position
+	w._detonate(bullet)
+
+	# ">=", not "==": a teammate taking no damage is also out of combat, so
+	# regen may have ticked. That caught this file's sibling once already.
+	_runner.check(
+		mate.health.current >= before,
+		_fail("the teammate lost nothing (%.1f -> %.1f)" % [before, mate.health.current])
+	)
+
+
+# ------------------------------------------------------- the landing telegraph
+
+
+## A shell must carry its OWN flight time, because the ring is drawn from it.
+##
+## `GameView._draw_incoming_shells()` tightens the landing ring as the shell
+## falls, and it divided the remaining life by `_world.player.gun.lifetime()` —
+## the LOCAL player's gun. That is right only while every class has the same
+## flight time, which stopped being true the moment one class could be slower
+## than another.
+##
+## Concretely: a Ranger watching an enemy Lobber's shell divided a 0.33 s flight
+## by its own 0.165 s reach, so the fraction clamped at 1.0 for the whole first
+## half of the flight. The ring sat at full width and only began to close once
+## the shell was already halfway down — the telegraph degrading in exactly the
+## case ADR-0030 exists for, with nothing failing.
+##
+## The fix is the same one `owner_team` and `arcing` already document: the
+## projectile carries what the projectile needs, because the shooter may be dead
+## before it lands. This asserts the data the drawing reads, since the drawing
+## itself is not reachable headless.
+func test_a_shell_carries_its_own_flight_time() -> void:
+	_case = "telegraph"
+	var arcing := _arcing_class()
+	_runner.check(arcing != null, _fail("some class arcs"))
+	if arcing == null:
+		return
+
+	var flat := FighterClass.at(0)
+	var shell_gun := Gun.new(arcing)
+	var player_gun := Gun.new(flat)
+
+	# The premise of the bug: the two lifetimes genuinely differ. Without this
+	# the rest passes on a build where every class flies for the same time, and
+	# the assertion would be measuring nothing.
+	_runner.check(
+		absf(shell_gun.lifetime() - player_gun.lifetime()) > 0.01,
+		(
+			_fail("a shell and a flat round fly for different times (%.3fs vs %.3fs)")
+			% [shell_gun.lifetime(), player_gun.lifetime()]
+		)
+	)
+
+	var w := _world()
+	var bullet: Bullet = w._free_bullet()
+	bullet.launch(
+		w.arena.bounds().get_center(),
+		Vector2.RIGHT,
+		shell_gun.speed(),
+		shell_gun.damage(),
+		shell_gun.lifetime(),
+		1,
+		0,
+		true,
+		arcing.splash_radius
+	)
+
+	_runner.check(
+		absf(bullet.total_life - shell_gun.lifetime()) < 0.0001,
+		_fail("the shell records the flight IT was launched with")
+	)
+
+	# Halfway there, the ring must read halfway there.
+	var half := int(round(shell_gun.lifetime() * 0.5 / DT))
+	for _i in half:
+		w._tick_bullets(DT)
+	_runner.check(bullet.active, _fail("and is still in the air at the halfway mark"))
+
+	var remaining := bullet.life / maxf(bullet.total_life, 0.001)
+	_runner.check(
+		absf(remaining - 0.5) < 0.06,
+		_fail("the ring reads %.2f of the flight left, not 0.50" % remaining)
+	)
+
+	# The whole of the bug, stated as the difference it makes: against the
+	# player's own gun the same shell reads as not having started yet.
+	var borrowed := bullet.life / maxf(player_gun.lifetime(), 0.001)
+	_runner.check(
+		borrowed > 0.95,
+		(
+			_fail("borrowing the player's %.3fs would read %.2f — the ring would not have moved")
+			% [player_gun.lifetime(), borrowed]
+		)
+	)
+
+	_restore()

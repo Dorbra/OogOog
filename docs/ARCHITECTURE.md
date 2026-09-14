@@ -45,14 +45,14 @@ Three consequences worth stating plainly:
 
 | Path | Layer | May depend on | Contains |
 |---|---|---|---|
-| `src/sim/` | Simulation | `Tuning`, `Arena` | `input_command`, `sim_world`, `fighter`, `bow`, `arrow`, `health` |
+| `src/sim/` | Simulation | `Tuning`, `Arena` | `input_command`, `sim_world`, `fighter`, `gun`, `bullet`, `health` |
 | `src/arena/` | World data | `Tuning` | `arena.gd` — ASCII grid, collision, spawns |
 | `src/input/` | Producer | `Tuning`, Godot `Input` | `touch_controls.gd` |
 | `src/sim/` also holds `match_state.gd` | Simulation | `Tuning` | Phases, score, clock and the win condition — see [ADR-0017](decisions/0017-the-match-is-sim-state.md) |
 | `src/sim/` also holds `aim.gd` | Simulation | none | The one projectile-intercept solver, shared by the player's auto-aim and the bots — see [ADR-0020](decisions/0020-aim-assist-must-predict.md) |
 | `src/ai/` | Producer | `src/sim/`, `src/arena/`, `Tuning` | `bot_controller.gd` — FSM and difficulty; `grid_path.gd` — A* over the arena grid |
-| `src/sim/fighter_class.gd` | Simulation | `Tuning`, `data/classes.json` | What makes one cat shoot differently: multipliers over the global keys, never absolutes (ADR-0028) |
-| `src/sim/hazard.gd` | Simulation | none | Pooled ground hazard — caltrops. Damage per second, never once on entry |
+| `src/sim/fighter_class.gd` | Simulation | `Tuning`, `data/classes.json` | What makes one cat shoot differently: multipliers over the global keys, never absolutes (ADR-0028). Also `arcing` and `splash_radius`, which is all a shell that flies over walls needs |
+| `src/sim/hazard.gd` | Simulation | none | Pooled ground hazard — caltrops and the burning zone. Damage per second, never once on entry. The two differ only in tuning, which is what a pooled generic entity buys |
 | `src/view/` | Presentation | everything | `game_view`, `camera_rig`, `fx`, `hud`, `cat_view`, `terrain`, `palette`, `safe_area` |
 | `src/debug/` | Tooling | everything | `tuning`, `debug_overlay`, `build_info` |
 | `src/main.gd` | Composition root | everything | wires the graph, pumps the tick |
@@ -308,6 +308,7 @@ Two non-obvious details:
 | ~~`SimWorld._free_bullet()` is a linear scan of 150~~ | **Measured: invisible.** ~34 shots/s across six fighters, ~75 field reads each | **CLOSED, NOT PAID.** A free list adds an invariant that can be corrupted, to save nothing |
 | ~~Web export is a debug build (36 MB wasm)~~ | **The premise was false.** Pages serves it gzipped — measured on the wire at **10.2 MB**, not 36 — and the release export is *bigger* on disk (40.1 vs 38.5 MB), identical compressed | **CLOSED, NOT PAID.** Switching would also have deleted the DBG panel from the web channel, since it gates on `OS.is_debug_build()` |
 | `GridPath.find_path()` is 357 µs a call and five bots repath in lockstep | The worst tick in a match (4.1 ms) is several A\* runs landing together. Already rate-limited to 2.5/s per bot, so it is a spike, not a leak | Unclaimed — staggering each bot's repath phase would spread it, but it changes bot timing and therefore behaviour, which this branch deliberately would not do |
+| **The LAN spike has never been runnable** | `docs/LAN_SPIKE.md` describes DBG → Net → HOST; the overlay builds Tuning, Log and Info only. `NetLink` and `LanBeacon` are reachable solely from `tools/net_probe.gd`, the loopback gate — nothing in `main.gd` touches them, so the four questions the spike raised could never have been answered on hardware | `feat/lan`, which has to build the tab before it can build anything else. The doc now says so rather than asserting a flow that does not exist |
 | A missing data file degrades silently at runtime | `push_error` to a log nobody reads on a phone | Unclaimed; the CI gate makes it unreachable, which is not the same as impossible |
 
 ---

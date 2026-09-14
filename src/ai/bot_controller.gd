@@ -372,8 +372,17 @@ func _aim_and_fire(me: Fighter, world: SimWorld, target: Fighter) -> void:
 		_cmd.aim = aim
 
 	# The same wall question the bullet itself will ask a tick from now. Firing
-	# into cover wastes the round AND the reload, which at five rounds is most of
-	# a fight's worth of ammunition.
+	# into cover wastes the round AND the reload, which at three rounds is most
+	# of a fight's worth of ammunition.
+	#
+	# AN ARCING GUN DOES NOT ASK IT. A lobber's shell goes over the wall, so
+	# refusing the shot here would leave the class unable to do the one thing it
+	# exists for — and a bot that never uses its own mechanic teaches a child
+	# that the mechanic does not work.
+	if me.fighter_class.arcing:
+		_cmd.fire = true
+		return
+
 	var origin := me.position + aim * me.radius
 	var to := origin + aim * minf(me.gun.reach(), me.position.distance_to(target.position))
 	if world.arena.cast_segment(origin, to)["hit"]:

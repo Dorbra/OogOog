@@ -403,6 +403,16 @@ func _draw_ability_glyph(cls: FighterClass, centre: Vector2, alpha: float) -> vo
 			for i in 6:
 				var angle := TAU * float(i) / 6.0
 				draw_circle(centre + Vector2(cos(angle), sin(angle)) * 10.0, 3.6, tint)
+		"burning_zone":
+			# A filled disc with flame tips: the same "an area, not a point" idea
+			# as caltrops, but solid rather than scattered, because this one is
+			# thrown somewhere rather than dropped underfoot.
+			draw_circle(centre, 13.0, Color(tint.r, tint.g, tint.b, 0.30 * alpha))
+			draw_arc(centre, 17.0, 0.0, TAU, 28, Color(tint.r, tint.g, tint.b, 0.6 * alpha), 2.5)
+			for i in 5:
+				var angle := -PI * 0.5 + TAU * float(i) / 5.0
+				var base := centre + Vector2(cos(angle), sin(angle)) * 8.0
+				draw_line(base, base + Vector2(cos(angle), sin(angle)) * 9.0, tint, 3.0)
 		_:
 			pass
 
@@ -418,19 +428,25 @@ func _draw_class_gun(cls: FighterClass, rect: Rect2, alpha: float) -> void:
 	var size := rect.size.x * 0.40
 	var origin := rect.get_center() + Vector2(rect.size.x * 0.12, rect.size.y * 0.14)
 	var spread := cls.pellets > 1
-	var length := size * (0.85 if spread else 1.45)
-	var half := size * (0.30 if spread else 0.19)
-	var muzzle := origin + Vector2(length, 0.0)
+	var arcing := cls.arcing
+	var length := size * (0.85 if spread else (0.95 if arcing else 1.45))
+	var half := size * (0.30 if spread else (0.36 if arcing else 0.19))
+
+	# The same raised barrel CatView draws in the fight. The picker has to teach
+	# the symbol the game then uses, or it teaches one that appears nowhere.
+	var facing := Vector2.RIGHT.rotated(-0.42) if arcing else Vector2.RIGHT
+	var tangent := Vector2(-facing.y, facing.x)
+	var muzzle := origin + facing * length
 
 	var barrel := Palette.ARROW.darkened(0.35)
 	barrel.a = alpha
 	draw_colored_polygon(
 		PackedVector2Array(
 			[
-				origin + Vector2(0.0, -half),
-				muzzle + Vector2(0.0, -half),
-				muzzle + Vector2(0.0, half),
-				origin + Vector2(0.0, half),
+				origin + tangent * -half,
+				muzzle + tangent * -half,
+				muzzle + tangent * half,
+				origin + tangent * half,
 			]
 		),
 		barrel
@@ -444,7 +460,7 @@ func _draw_class_gun(cls: FighterClass, rect: Rect2, alpha: float) -> void:
 	var pitch := half * 1.35
 	for i in cls.pellets:
 		var offset := -pitch + pitch * 2.0 * float(i) / float(maxi(cls.pellets - 1, 1))
-		draw_circle(muzzle + Vector2(0.0, offset), size * 0.15, tip)
+		draw_circle(muzzle + tangent * offset, size * 0.15, tip)
 
 
 func _draw_countdown() -> void:

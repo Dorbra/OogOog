@@ -187,6 +187,11 @@ jobs:
           sudo apt-get install -y -qq xvfb libgl1-mesa-dri >/dev/null
           ./tools/render_test.sh "$(command -v godot)" 90 build/shot.png idle
           ./tools/render_test.sh "$(command -v godot)" 240 build/combat.png combat
+          # The third class is the only one whose promise lives between the
+          # muzzle and the ground: a shell over a wall with its landing ring
+          # already down (ADR-0030). Nothing else in this job draws an arcing
+          # bullet at all, and an impact frame cannot show a telegraph.
+          ./tools/render_test.sh "$(command -v godot)" 300 build/lob.png lob
 
       # A capture proves the screen DREW. It does not prove anyone can touch it.
       # A build shipped where the setup screen could not be dismissed at all —
@@ -293,6 +298,7 @@ jobs:
             build/android/*.apk
             build/shot.png
             build/combat.png
+            build/lob.png
           if-no-files-found: error
 
       # ---- Publish: pull request ------------------------------------------
@@ -311,7 +317,7 @@ jobs:
             --notes "Build for pull request #${PR} at \`${{ steps.stamp.outputs.short_sha }}\` (run #${GITHUB_RUN_NUMBER}). Not for merging — this tag is replaced on every push to the PR." \
             --prerelease \
             --target "${{ github.event.pull_request.head.sha }}" \
-            build/android/*.apk build/shot.png build/combat.png
+            build/android/*.apk build/shot.png build/combat.png build/lob.png
 
       - name: Comment APK link on the PR
         if: github.event_name == 'pull_request'
@@ -329,7 +335,7 @@ jobs:
           |---|---|
           | **Install on phone** | [\`${APK}\`](${URL}) |
           | **Play in browser** | https://dorbra.github.io/OogOog/pr/${PR}/ |
-          | **Screenshots** | [idle](https://github.com/${GITHUB_REPOSITORY}/releases/download/pr-${PR}/shot.png) · [combat](https://github.com/${GITHUB_REPOSITORY}/releases/download/pr-${PR}/combat.png) |
+          | **Screenshots** | [idle](https://github.com/${GITHUB_REPOSITORY}/releases/download/pr-${PR}/shot.png) · [combat](https://github.com/${GITHUB_REPOSITORY}/releases/download/pr-${PR}/combat.png) · [shell in flight](https://github.com/${GITHUB_REPOSITORY}/releases/download/pr-${PR}/lob.png) |
 
           Both are **this PR**, not \`main\`. The preview lives in its own
           directory on the \`gh-pages\` branch, so it cannot overwrite the site
@@ -371,7 +377,7 @@ jobs:
 
           Install the APK below on your phone. The browser build is published to this repo's GitHub Pages URL." \
             --prerelease \
-            build/android/*.apk build/shot.png build/combat.png
+            build/android/*.apk build/shot.png build/combat.png build/lob.png
 
   # Publishes the web build by PUSHING A BRANCH, not through the Pages
   # deployment API.

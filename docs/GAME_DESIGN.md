@@ -161,7 +161,7 @@ their spawns at the start of a round.
 
 ## 4. Combat model
 
-### Damage: every shot is the same shot
+### Damage: three guns, and where you stand decides
 
 | | |
 |---|---|
@@ -170,26 +170,53 @@ their spawns at the start of a round.
 | Flight to maximum range | 165 ms |
 | Damage | 65 — **3.1 hits to a kill** |
 | Deviation | none |
-| Fire interval | 0.5 s — a FLOOR between releases, not a cadence |
+| Fire interval | 0.45 s — a FLOOR between releases, not a cadence |
 | Magazine / reload | 3 rounds, one back every 0.9 s |
-| Classes | Ranger (the numbers above) and Skirmisher (3 pellets, 46° fan, 0.48× damage, 0.62× range, 0.8× interval, 1.18× walk, 1.2× health) |
-| Abilities | Charged by damage dealt, 400 hp a bar. Ranger dashes; Skirmisher drops caltrops |
 | Required lead | 6.1°, against a cat subtending 7.2° |
 
+The three classes, as multipliers over those keys
+([ADR-0028](decisions/0028-a-class-is-a-multiplier.md)) — the table above is
+the קלע row spelled out:
+
+| | קלע Ranger | פורץ Skirmisher | מרגמה Lobber |
+|---|---|---|---|
+| shot | one round | **3 pellets in a 46° fan** | one **arcing shell**, 82 px splash |
+| damage | 65 — 3.1 hits | 29 a pellet, 86 point blank | 45 at the centre, less at the edge |
+| reach | 231 px | 143 px (fan opens past a cat at 74) | 208 px, **over walls** |
+| bullet speed | 1400 px/s | 1512 | **630** — 330 ms of flight to watch |
+| interval / magazine | 0.45 s, 3 | 0.40 s, 2 | 0.63 s, 2 |
+| reload a round | 0.9 s | 1.31 s | 1.17 s |
+| walk / health | 1.0 / 200 | 1.18× / 220 | 1.0 / 200 |
+| ability | dash | caltrops | burning zone |
+
+Abilities charge from **damage dealt**, 400 hp a bar
+([ADR-0029](decisions/0029-abilities-charge-from-damage-dealt.md)) — a
+cooldown pays you for waiting, a charge pays you for fighting.
 Measured over 24 seeded matches: **~37 kills, first blood at 6.1 s** — 3.2× the lethality of the first gun tuning, chosen deliberately after
 being shown that number ([ADR-0025](decisions/0025-a-rate-is-not-a-count.md)).
 `match_target_kills` is 35 so the clock decides 24 matches in 24.
 
-That last row is the Ranger in one line: **point at a cat and the bullet arrives
-where you pointed**, at every range.
+The Ranger in one line: **point at a cat and the bullet arrives where you
+pointed**, at every range.
 
-**It is no longer the whole story.** That paragraph used to end "nothing varies
-between one shot and the next, which is a real loss", and it was true for four
-milestones. Classes are what pays it back
-([ADR-0028](decisions/0028-a-class-is-a-multiplier.md)): a Skirmisher fires
-three pellets in a 46° fan at 62% of the range, so where you stand decides
-whether you do 50 damage or 17. That is a decision, made several times a second,
-which is what shooting had stopped asking for.
+**That used to be the whole story, and it was the problem.** This section once
+ended "nothing varies between one shot and the next, which is a real loss", and
+it was true for four milestones. Classes are what pays it back: a Skirmisher
+fires three pellets in a 46° fan at 62% of the range, so where you stand decides
+whether you do 86 damage or 29; a Lobber throws a slow shell **over the wall you
+are hiding behind** and does not care where you stand at all. That is a decision,
+made several times a second, which is what shooting had stopped asking for.
+
+**Balance is measured, not argued.** The three classes sit in a triangle rather
+than on a ladder — the Lobber beats the Ranger, the Skirmisher beats the Lobber,
+and the Ranger is even with the Skirmisher. Every match-up is inside 59/41, and
+five sweeps of `tools/measure_matches.gd` (every class against every class, all
+six slots bot-driven) is what put them there. Two numbers moved for reasons worth
+keeping: the Skirmisher pays for its close-range lethality in **sustain** — a
+1.45× reload — rather than in damage, because that lethality is the thing that
+was asked for; and the Lobber's damage came down from 0.85× to 0.7× because
+splash *plus* ignoring cover is already a great deal of value, and 0.85 on top
+was paying for it twice.
 
 **Reach is not a free parameter.** 231 px sits inside the 248 px shortest
 half-axis of what the camera shows, and
@@ -332,12 +359,15 @@ colour-coded scores. No per-player statistics, ever: publishing who died most,
 every round, to the youngest player is the opposite of *competitive but not
 punishing*.
 
-### Magazine: 5 rounds, one back every 1.1 s
+### Magazine: three rounds, one back every 0.9 s
 
 Lifted from Brawl Stars' ammo rhythm. It is not a resource to manage across a
 match — it is a **pacing device**. It gates spam and forces the "am I committed
 to this fight?" decision, which matters *more* once regen exists, because
 disengaging is always an option.
+
+Each class scales it: the Skirmisher and the Lobber carry **two** rounds and
+reload more slowly, which is where both of them pay for what their shot does.
 
 ### Bots: they stop moving, on purpose
 
@@ -372,10 +402,19 @@ always end up with one code path that forgets to clear them.
 
 ### Cover: two kinds, and they must never look alike
 
-| | Blocks movement | Blocks arrows | Blocks sight |
-|---|---|---|---|
-| **Wall** `#` | yes | yes | yes |
-| **Bush** `b` | no | no | yes |
+| | Blocks movement | Blocks a flat shot | Blocks a **shell** | Blocks sight |
+|---|---|---|---|---|
+| **Wall** `#` | yes | yes | **no** | yes |
+| **Bush** `b` | no | no | no | yes |
+
+**A wall stopped being an answer when the Lobber shipped**, and that is the
+whole point of the class: it is the first thing in the game that makes anyone
+move for a reason other than range. It does not violate
+[ADR-0016](decisions/0016-range-is-bounded-by-the-camera.md) — its reach is
+still inside the half-view, the shell is visible for its whole 330 ms flight,
+and a landing ring is drawn on the ground for **everyone** before it lands, so
+it is dodgeable rather than arbitrary
+([ADR-0030](decisions/0030-indirect-fire-must-telegraph.md)).
 
 Bushes are the single best mechanic Brawl Stars has, and they create ambush play
 out of almost no code.
@@ -477,18 +516,30 @@ is no image editor in this workflow.
 | M3.4 the aim outlives the shot | done |
 | M3.5 spam fire, then automatic; five rounds, five-hit kill | done |
 | M3.6 tech debt — the frame budget is measured, at last | done |
-| **M3.7 LAN — the actual product goal** | **next** |
-| M4 content — 3 classes, abilities, pickups, sound | planned |
-| M5 polish — thermals, on-device profiling over a long session | planned |
+| M3.7 hold to aim, release to shoot — each bullet counts | done |
+| M4 classes — קלע and פורץ, one ability each, an icon picker | done |
+| M4.1 מרגמה — the shell that goes over the wall | done |
+| **M4.2 LAN — the actual product goal** | **next** |
+| M5 content — pickups, sound, a second arena | planned |
+| M6 polish — thermals, on-device profiling over a long session | planned |
 
-**Something fights back, and now a match ends.** Two minutes, first to six kills
-or whoever leads on the clock, then a results screen and a tap for the next
-round. Team size is picked from a row of cat icons before the whistle.
+**Something fights back, a match ends, and shooting is a decision again.** Two
+minutes, first to ten kills or whoever leads on the clock, then a results screen
+and a tap for the next round. Team size and class are both picked from a row of
+cat cards before the whistle.
 
 **The honest summary is now different again: everyone is playing alone.** The
 whole point of this game is three people in one room, and until `feat/lan` lands
 the other five cats are bots. That is the last milestone between here and the
 thing the project is actually for.
+
+**And LAN has never been runnable**, which was found while planning it: the
+overlay has no Net tab, so the flow `docs/LAN_SPIKE.md` describes has never
+existed in a build. The four questions the spike raised have been "awaiting real
+hardware" for several milestones with no build in which they could be answered.
+That is the same failure this project has caught twice before — a document
+asserting a capability the artifact does not have — and it is now written down
+in the spike rather than discovered again.
 
 ---
 
@@ -497,34 +548,32 @@ thing the project is actually for.
 1. **`feat/lan`** — host, join, discovery. The three of you playing together,
    which is the entire point. Blocked on nothing but work: the M3.0 spike proved
    the transport on loopback at 7 ms, and the four questions it raised still need
-   two real phones on a real router to answer.
-2. **`feat/match-loop`** *(done — kept here for the ordering below)* — player health, death, respawn, deathmatch to N kills,
-   countdown, results screen.
-2. **`chore/tech-debt`** — see [ARCHITECTURE.md §9](ARCHITECTURE.md#9-known-debt-stated-honestly).
-3. **`feat/super`** — an ability charged by **damage dealt, not a cooldown**.
-   With regen covering survival, this is what pulls players toward fights instead
-   of away from them.
+   two real phones on a real router to answer — **and a Net tab to answer them
+   from**, which does not exist yet. See [LAN_SPIKE.md](LAN_SPIKE.md).
+2. **`feat/pickups`** — the fast heal, demoted from survival necessity to tempo.
+3. **`feat/sound`** — the typed sim events ([ADR-0007](decisions/0007-typed-sim-events.md))
+   were built to hang audio off, and nothing has yet.
 
-### Planned characters (M4)
+### The characters — all three built
 
 Differentiated by **weapon behaviour, not stat sliders** — three guns that play
-differently, rather than one gun with three damage numbers.
+differently, rather than one gun with three damage numbers. This is where the
+debt from deleting the draw curve
+([ADR-0022](decisions/0022-guns-supersede-archers.md)) was paid: shooting is a
+decision again, and the decision is *where you stand*.
 
-This is also where the debt from deleting the draw curve gets paid. Right now
-every shot in the game is identical, which is the honest cost of the trade
-recorded in [ADR-0022](decisions/0022-guns-supersede-archers.md); class
-asymmetry is what puts a decision back into shooting.
+| | Weapon | Ability | State |
+|---|---|---|---|
+| קלע Ranger | Baseline. Medium range, flat, the gun described above | Dash | built |
+| פורץ Skirmisher | Rapid, short range, a 3-pellet fan per trigger pull | Caltrops | built |
+| מרגמה Lobber | Slow arcing shell that flies **over walls**, splash on landing | Burning zone | built |
 
-| | Weapon | Ability |
-|---|---|---|
-| Ranger | Baseline. Medium range, flat, the gun described above | Dash / roll |
-| Skirmisher | Rapid, short range, a 3-round spread per trigger pull | Caltrops |
-| Lobber | Slow arcing shell that flies **over walls**, AoE on landing | Burning zone |
-
-**The gun stats are read from a single global `Tuning` table today**, so this is
-a real structural change and not three JSON files: `Gun.speed()`, `damage()`,
-`capacity()` and the fire interval all have to become per-fighter without
-losing the property that a bot fires the same gun you do.
+**A class is a set of multipliers over the global keys**, not a stat block
+([ADR-0028](decisions/0028-a-class-is-a-multiplier.md)). That is what keeps the
+on-device tuning workflow alive with three guns in play: every DBG slider still
+moves the whole game, and a class only says how it differs from that. A
+per-class table would have taken the panel from 62 keys to ~180 and made
+"drag damage and feel the result" impossible.
 
 ---
 
@@ -534,13 +583,13 @@ Recorded so they can be declined again with a reason.
 
 | Refused | Why |
 |---|---|
-| **Progression, currency, shops, unlocks, accounts** | Single-player, one user. Every hour spent here is an hour not spent on the fight. |
-| **Online / dedicated-server multiplayer** | Costs money and ops forever. Same-WiFi LAN is the ceiling, and it is deferred, not promised. |
+| **Progression, currency, shops, unlocks, accounts** | Three fixed players with no matchmaking to hide a power gap. Brawl Stars' +10%/level was examined and refused for exactly that reason — [ADR-0013](decisions/0013-audience-is-a-family.md). |
+| **Online / dedicated-server multiplayer** | Costs money and ops forever. Same-WiFi LAN is the ceiling — and since [ADR-0013](decisions/0013-audience-is-a-family.md) it is the product, not a deferral. |
 | **Hitscan weapons** | Travel time is what makes shots dodgeable and readable, and what keeps LAN plausible. |
 | **A physics engine for collision** | [ADR-0008](decisions/0008-no-physics-engine.md) — headless testability is worth more than engine features here. |
 | **Making the pond gameplay-relevant** | It is decorative. Water that slows or damages is a real design decision deserving its own change, not something smuggled into a cover PR. |
 | **2D lights** | Expensive on mobile for a flat-shaded game that gains nothing from them. |
-| **Aim assist strong enough to aim for you** | `aim_assist_deg` is **4°** and, since [ADR-0020](decisions/0020-aim-assist-must-predict.md), it bounds how far the game may bend your shot rather than merely admitting it. A 4° gate that then snapped onto the intercept would be a lock-on: the lead a player owes is about 16°, so the game would be doing all of the aiming. It defaulted to 0 while the audience was one adult; [ADR-0013](decisions/0013-audience-is-a-family.md) changed that premise. It stays a slider. |
+| **Aim assist strong enough to aim for you** | `aim_assist_deg` is **4°** and, since [ADR-0020](decisions/0020-aim-assist-must-predict.md), it bounds how far the game may bend your shot rather than merely admitting it. A 4° gate that then snapped onto the intercept would be a lock-on rather than a nudge. It defaulted to 0 while the audience was one adult; [ADR-0013](decisions/0013-audience-is-a-family.md) changed that premise. It stays a slider. |
 
 ---
 
@@ -553,9 +602,13 @@ Things that are genuinely undecided, and what would settle them.
   magazine limits, damage-charged abilities, a match timer — but this needs real
   bots to test. **Settled by:** playtesting after `feat/bots`; the regen delay
   and rate are the first dials to turn.
-- ~~**Is the auto-repeat toggle on or off by default?**~~ **Answered in M3.6:**
-  the gun is automatic, full stop. The toggle is deleted rather than defaulted —
-  an option nobody picks is a second code path nobody tests.
+- ~~**Is the auto-repeat toggle on or off by default?**~~ **Answered twice.** In
+  M3.6 the gun became automatic and the toggle was deleted, on the grounds that
+  an option nobody picks is a second code path nobody tests. In M3.7 automatic
+  fire went too: *"no longer spamming shots but aiming and hitting is the key
+  for winning"*. **You hold to aim and release to shoot**
+  ([ADR-0031](decisions/0031-release-is-the-shot.md)), and there is still one
+  firing model rather than a switch.
 - **Does the arena read well?** Cover density, corridor widths, spawn placement
   are one text-file edit away. **Settled by:** playing it and saying what is
   wrong, rather than guessing at numbers.
