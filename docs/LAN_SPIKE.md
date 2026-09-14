@@ -98,7 +98,7 @@ separately. "Found nothing" and "found it but could not connect" are different
 problems with different fixes, and a single "it didn't work" would hide which
 one occurred.
 
-If discovery fails but manual joining works, M3.3 needs a different join flow —
+If discovery fails but manual joining works, the join flow needs changing —
 probably a short room code — because *"ask an adult for the IP address"* is not
 a viable way for a 5-year-old to join a game.
 

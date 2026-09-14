@@ -127,7 +127,7 @@ func _build_teams() -> void:
 	player = fighters[0]
 
 	# Every empty slot is a bot, so the match has the same shape whether one
-	# person is playing or (from M3.3) three are. Seeded by index rather than
+	# person is playing or (since M4.2) three are. Seeded by index rather than
 	# randomised: two bots sharing an RNG stream would strafe in lockstep, and a
 	# seeded one keeps the headless tests repeatable.
 	for i in range(1, fighters.size()):

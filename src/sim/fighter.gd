@@ -1,6 +1,6 @@
 class_name Fighter
 extends RefCounted
-## One combatant. The player, a bot, and (from M3.3) a remote player are all
+## One combatant. The player, a bot, and (since M4.2) a remote player are all
 ## this — the only difference is who produces the InputCommand.
 ##
 ## This is the payoff of the sim/view split (ADR-0003). `Actor` and `Dummy` used

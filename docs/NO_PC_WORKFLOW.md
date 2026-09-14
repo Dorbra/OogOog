@@ -26,7 +26,7 @@ milestones were spent building them rather than building the game.
 
 ## 1. Nothing that affects feel is a hardcoded constant
 
-**49 tuning keys**, all in `data/tuning_defaults.json`, all adjustable on the
+**76 tuning keys**, all in `data/tuning_defaults.json`, all adjustable on the
 phone at runtime, all applying live with no restart.
 
 ```gdscript

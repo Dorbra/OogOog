@@ -18,6 +18,11 @@ const LIVING_DOCS := [
 	"res://docs/CICD.md",
 	"res://README.md",
 	"res://CONTRIBUTING.md",
+	# Both of these carried a rotted "49 tuning keys" for four milestones while
+	# the two documents above were being kept current. A gate that audits some
+	# of the living documents teaches that the audited ones are the real ones.
+	"res://docs/README.md",
+	"res://docs/NO_PC_WORKFLOW.md",
 ]
 
 ## Where a backticked identifier is allowed to be "real". Contents AND file
@@ -198,3 +203,80 @@ func _referenced_keys(path: String) -> Array[String]:
 	for m in re.search_all(text):
 		out.append(m.get_string(1))
 	return out
+
+
+## A count in prose is a fact about the repo that nothing reads back.
+##
+## The sibling test above pins backticked KEY NAMES in the living documents, and
+## it was written because `draw_time_full` sat in GAME_DESIGN.md for four
+## milestones after the key was deleted. It closed that hole for names and left
+## the identical one open for NUMBERS — with exactly the same result:
+##
+##     "370 assertions"   in ARCHITECTURE.md and CICD.md   — really 863
+##     "49 tuning keys"   in NO_PC_WORKFLOW.md and docs/README.md — really 76
+##     "62 keys"          in GAME_DESIGN.md                — really 76
+##
+## All four were believed and none was true. That is worse than no number,
+## because a reader has no way to tell a measured claim from a remembered one,
+## and this project's whole method is that a claim nobody counts is a guess
+## (ADR-0025, ADR-0027).
+##
+## DELIBERATELY NARROW. This checks only facts THE BUILD CAN COMPUTE: how many
+## tuning keys exist, how many test files there are, how many ADRs are written.
+## It does not and must not try to verify "3.1 hits to a kill" or "231 px of
+## reach" — those are design claims that move with every balance pass, and a
+## gate that re-derived them would go red on honest work and be disabled within
+## a milestone. The bar is: one true value, readable by a script, that rots
+## silently when it drifts.
+##
+## docs/decisions/ is excluded for the same reason as above: an ADR quoting the
+## assertion count on the day it was written is correct history.
+func test_living_docs_do_not_quote_counts_that_have_moved() -> void:
+	_case = "doc counts"
+
+	var actual := {
+		"tuning keys": _defined_keys().size(),
+		"ADRs": _count_files("res://docs/decisions", ".md", "0"),
+		"test files": _count_files("res://tests", ".gd", ""),
+	}
+
+	# Guards against the gate passing because it measured nothing — the failure
+	# mode this whole file exists to catch, one level up.
+	for label: String in actual:
+		_runner.check(
+			int(actual[label]) > 0, "%s: counted %s at all (%d)" % [_case, label, actual[label]]
+		)
+
+	for path in LIVING_DOCS:
+		var text := FileAccess.get_file_as_string(path)
+		if text.is_empty():
+			continue
+		for label: String in actual:
+			var expected: int = actual[label]
+			# "<number> <label>", the shape every one of the rotted claims took.
+			var re := RegEx.new()
+			re.compile("([0-9]+)\\s+%s" % label.replace(" ", "\\s+"))
+			for m in re.search_all(text):
+				var quoted := int(m.get_string(1))
+				_runner.check(
+					quoted == expected,
+					(
+						'%s: %s says "%d %s", but there are %d'
+						% [_case, path.get_file(), quoted, label, expected]
+					)
+				)
+
+
+func _count_files(dir_path: String, suffix: String, prefix: String) -> int:
+	var dir := DirAccess.open(dir_path)
+	if dir == null:
+		return 0
+	var n := 0
+	dir.list_dir_begin()
+	var name := dir.get_next()
+	while name != "":
+		if not dir.current_is_dir() and name.ends_with(suffix) and name.begins_with(prefix):
+			n += 1
+		name = dir.get_next()
+	dir.list_dir_end()
+	return n
