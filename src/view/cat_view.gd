@@ -132,15 +132,29 @@ func _draw_gun() -> void:
 
 	var size := Tuning.get_value("gun_size")
 	var centre := aim * (radius * 1.15) + Vector2(0, -radius * 0.5)
-	var tangent := Vector2(-aim.y, aim.x)
 
-	# A spread gun is stubby and wide; a single-round gun is long and thin. The
-	# silhouette difference has to survive being 84 px tall on a phone in
-	# daylight, so it is proportion rather than detail.
+	# Three silhouettes, told apart by PROPORTION rather than detail, because the
+	# difference has to survive being 84 px tall on a phone in daylight:
+	#
+	#   long and thin              a single round
+	#   short and wide, many tips  a fan
+	#   short, thick, angled UP    a shell that goes over things
+	#
+	# The lobber's tilt is the readable part. Both other guns point flat along
+	# the aim; a barrel visibly raised off that line is the only cue on screen
+	# that says "this one does not care about your wall".
 	var spread := fighter_class.pellets > 1
-	var barrel_len := size * (0.85 if spread else 1.45)
-	var barrel_half := size * (0.30 if spread else 0.19)
-	var muzzle := centre + aim * barrel_len
+	var arcing := fighter_class.arcing
+	var barrel_len := size * (0.85 if spread else (0.95 if arcing else 1.45))
+	var barrel_half := size * (0.30 if spread else (0.36 if arcing else 0.19))
+
+	# Raised off the aim line, always away from the ground.
+	var tilt := -0.42 if aim.x >= 0.0 else 0.42
+	var barrel_dir := aim.rotated(tilt) if arcing else aim
+	# Perpendicular to the BARREL, not to the aim. Taking it from the aim would
+	# skew the tilted quad into a parallelogram instead of rotating it.
+	var tangent := Vector2(-barrel_dir.y, barrel_dir.x)
+	var muzzle := centre + barrel_dir * barrel_len
 
 	# Barrel: a quad along the aim, so it stays a rectangle at every angle
 	# rather than a line whose thickness reads differently on the diagonals.
@@ -157,7 +171,7 @@ func _draw_gun() -> void:
 	)
 
 	# Body: shorter and deeper, sitting behind the barrel.
-	var back := centre - aim * (size * 0.42)
+	var back := centre - barrel_dir * (size * 0.42)
 	var body_half := size * 0.34
 	draw_colored_polygon(
 		PackedVector2Array(

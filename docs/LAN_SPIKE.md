@@ -1,6 +1,25 @@
 # M3.0 — LAN transport spike
 
-**Status: shipped, awaiting a verdict from real hardware.**
+**Status: the transport is written and gated on loopback. THE FLOW BELOW IS NOT
+BUILT, and nothing in a shipped APK has ever reached it.**
+
+> **Correction, M4.1.** This document describes running the spike from a **Net
+> tab** in the DBG overlay. There is no Net tab. `debug_overlay.gd` builds
+> Tuning, Log and Info and nothing else; `NetLink` and `LanBeacon` are reachable
+> only from `tools/net_probe.gd`, the loopback gate, and `main.gd` never touches
+> either of them. So the four questions below have been "awaiting a verdict from
+> real hardware" for several milestones **with no build in which they could be
+> answered** — the instructions were written for a UI the PR did not ship.
+>
+> This is the failure [ADR-0019](decisions/0019-appearance-is-not-behaviour.md)
+> and [ADR-0027](decisions/0027-measure-a-debt-before-paying-it.md) were both
+> written about: a document asserting a capability the artifact does not have.
+> It is recorded here rather than quietly fixed so that `feat/lan` starts from
+> what is true — **building the tab is the first task in that branch**, not an
+> assumption it inherits.
+>
+> Everything below the line is therefore the *intended* procedure, kept because
+> it is still what the experiment needs to do. It is not yet a thing you can do.
 
 This is an experiment, not a feature. It exists to answer four questions that
 cannot be answered from a build machine, and the answers decide how M3.3 is
@@ -102,7 +121,7 @@ error — which is everything needed to tell the four questions apart.
 |---|---|
 | `src/net/net_link.gd` | ENet host/join, peer tracking, position publishing, application-level ping |
 | `src/net/lan_beacon.gd` | UDP broadcast discovery, so nobody types an IP |
-| `src/debug/debug_overlay.gd` | The **Net** tab — the experiment's entire UI |
+| `src/debug/debug_overlay.gd` | The **Net** tab — the experiment's entire UI. **Not built.** The three fields it needed (`_net_label`, `_host_list`, `_address_edit`) were declared and never assigned, and were deleted in M4.1 rather than left looking like a feature |
 | `tools/net_probe.gd` | Headless host/client probe |
 | `tests/test_net_loopback.sh` | Two processes, 127.0.0.1, state both ways. Runs in CI |
 

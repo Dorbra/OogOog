@@ -259,6 +259,8 @@ func _try_ability(user: Fighter) -> void:
 			_do_dash(user, dir)
 		"caltrops":
 			_do_caltrops(user)
+		"burning_zone":
+			_do_burning_zone(user)
 		_:
 			# An unknown ability spends nothing, because spend_charge() already
 			# took the bar. Refund it rather than silently eating the reward for
@@ -300,6 +302,34 @@ func _do_caltrops(user: Fighter) -> void:
 	)
 
 
+## A wide, long-lived patch of fire thrown to where the lobber is aiming.
+##
+## Reuses Hazard, which caltrops introduced: the difference between the two
+## abilities is entirely in the numbers — bigger, longer, and dropped at RANGE
+## rather than underfoot. That it needed no new type is the sign the caltrops
+## implementation was the right shape.
+##
+## Placed at the aim point rather than at the feet because a lobber's whole
+## identity is affecting ground it is not standing on. It is clamped to the
+## gun's reach, so the ability cannot out-range the weapon and land off screen.
+func _do_burning_zone(user: Fighter) -> void:
+	var hazard := _free_hazard()
+	if hazard == null:
+		return
+
+	var at := (
+		user.position + user.facing * minf(Tuning.get_value("burning_zone_range"), user.gun.reach())
+	)
+	hazard.arm(
+		at,
+		Tuning.get_value("burning_zone_radius"),
+		Tuning.get_value("burning_zone_damage_per_second"),
+		Tuning.get_value("burning_zone_time"),
+		user.team,
+		user.get_instance_id()
+	)
+
+
 func _free_hazard() -> Hazard:
 	for hazard in hazards:
 		if not hazard.active:
@@ -326,6 +356,34 @@ func _tick_hazards(delta: float) -> void:
 			apply_damage(
 				f, hazard.damage_per_second * delta, dir, hazard.owner_team, hazard.owner_id
 			)
+
+
+## The blast where a shell lands.
+##
+## Damage falls off LINEARLY to nothing at the edge, so standing at the rim is a
+## graze and standing on it is not. Full damage across the whole circle would
+## make position inside the blast meaningless, which is most of what there is to
+## play against a weapon you cannot dodge by aim alone.
+##
+## Routed through apply_damage() like everything else, so friendly fire, ability
+## charge and the hit event all keep working with no new rules — the single
+## funnel doing its job (ADR-0029).
+func _detonate(bullet: Bullet) -> void:
+	if bullet.splash_radius <= 0.0:
+		return
+
+	var centre := bullet.position
+	for f in fighters:
+		if not f.alive() or f.team == bullet.owner_team:
+			continue
+		var distance := centre.distance_to(f.position) - f.radius
+		if distance > bullet.splash_radius:
+			continue
+
+		var falloff := 1.0 - clampf(maxf(distance, 0.0) / bullet.splash_radius, 0.0, 1.0)
+		var away := f.position - centre
+		var dir := away.normalized() if away.length_squared() > 0.01 else Vector2.UP
+		apply_damage(f, bullet.damage * falloff, dir, bullet.owner_team, bullet.owner_id)
 
 
 ## One trigger pull, however many pellets the class fires.
@@ -357,7 +415,9 @@ func _launch_fan(shooter: Fighter, origin: Vector2, dir: Vector2) -> void:
 			gun.damage(),
 			gun.lifetime(),
 			shooter.team,
-			shooter.get_instance_id()
+			shooter.get_instance_id(),
+			gun.fighter_class.arcing,
+			gun.fighter_class.splash_radius
 		)
 
 
@@ -433,15 +493,24 @@ func _tick_bullets(delta: float) -> void:
 		bullet.tick(delta, bounds)
 		if not bullet.active:
 			if was_active:
+				# A shell that reaches the end of its arc LANDS, and landing is
+				# the whole point of the class. A flat round simply stops.
+				_detonate(bullet)
 				bullet_expired.emit(bullet.position)
 			continue
 
 		# Walls are checked BEFORE targets, and the bullet's segment is shortened
 		# to the impact point first — otherwise a target standing behind a wall
 		# would still be hit by a shot that should have been stopped by it.
-		var wall: Dictionary = arena.cast_segment(from, bullet.position)
-		if wall["hit"]:
-			bullet.position = wall["point"]
+		#
+		# An ARCING shell skips this entirely: it is over the wall, not in it.
+		# That is the one line that makes the lobber a different class rather
+		# than a slow Ranger, and it is why ADR-0030 exists.
+		var wall := {"hit": false}
+		if not bullet.arcing:
+			wall = arena.cast_segment(from, bullet.position)
+			if wall["hit"]:
+				bullet.position = wall["point"]
 
 		for f in fighters:
 			if not f.alive():
@@ -452,13 +521,20 @@ func _tick_bullets(delta: float) -> void:
 			if f.team == bullet.owner_team:
 				continue
 			if bullet.hits_circle(f.position, f.radius):
-				apply_damage(
-					f,
-					bullet.damage,
-					bullet.velocity.normalized(),
-					bullet.owner_team,
-					bullet.owner_id
-				)
+				# A shell that strikes somebody on the way still detonates, so
+				# a direct hit is not WEAKER than a near miss — which it would
+				# be if the blast only happened at the end of the arc.
+				if bullet.splash_radius > 0.0:
+					bullet.position = f.position
+					_detonate(bullet)
+				else:
+					apply_damage(
+						f,
+						bullet.damage,
+						bullet.velocity.normalized(),
+						bullet.owner_team,
+						bullet.owner_id
+					)
 				bullet.deactivate()
 				break
 

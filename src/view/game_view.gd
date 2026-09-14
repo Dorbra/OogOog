@@ -232,6 +232,7 @@ func _draw() -> void:
 	# aim preview has to stay the topmost thing in the world layer because it is
 	# the one element the player is actively steering.
 	_draw_hazards()
+	_draw_incoming_shells(alpha)
 	_draw_aim_preview(alpha)
 
 	for i in _fighter_views.size():
@@ -342,10 +343,19 @@ func _draw_aim_preview(alpha: float) -> void:
 
 	# Stop at the first wall, using the same cast the bullets themselves use.
 	# Without this the line crosses stone and promises a shot the arena refuses.
-	var wall: Dictionary = _world.arena.cast_segment(start, end)
-	var blocked: bool = wall["hit"]
-	if blocked:
-		end = wall["point"]
+	#
+	# AN ARCING SHELL IS NOT STOPPED, so its line is not either. Cutting a
+	# lobber's preview at a wall it flies over would be the same lie in the
+	# opposite direction: the line would promise a shot dying in stone while the
+	# shell sailed past it.
+	var arcing: bool = _world.player.fighter_class.arcing
+	var wall := {"hit": false}
+	var blocked := false
+	if not arcing:
+		wall = _world.arena.cast_segment(start, end)
+		blocked = wall["hit"]
+		if blocked:
+			end = wall["point"]
 
 	var col := Palette.AIM.lerp(Color.WHITE, 0.65)
 	if blocked:
@@ -360,7 +370,13 @@ func _draw_aim_preview(alpha: float) -> void:
 		var fade := (1.0 - t) * 0.7 * strength
 		draw_circle(p, lerpf(4.5, 2.0, t), Color(col.r, col.g, col.b, fade))
 
-	draw_arc(end, 18.0, 0.0, TAU, 20, Color(col.r, col.g, col.b, 0.8 * strength), 2.5)
+	# The reticle is the BLAST FOOTPRINT for a gun that has one, not a fixed dot.
+	# A lobber aiming at a cluster needs to see how much ground the shell covers
+	# before letting go — that is the decision the class is made of, and the hold
+	# phase of the trigger exists to give you time to make it.
+	var splash: float = _world.player.fighter_class.splash_radius
+	var reticle := splash if splash > 0.0 else 18.0
+	draw_arc(end, reticle, 0.0, TAU, 28, Color(col.r, col.g, col.b, 0.8 * strength), 2.5)
 
 
 ## How wide one ammo pip may be, so the row never outgrows the cat.
@@ -406,6 +422,40 @@ func _draw_magazine_pips() -> void:
 		draw_rect(r, Color(1, 1, 1, 0.18))
 		if i < f.gun.magazine:
 			draw_rect(r, Palette.ARROW)
+
+
+## A ring on the ground under every shell in flight, for EVERYONE.
+##
+## This is the property that lets a class shoot over walls without breaking
+## ADR-0016 — nothing may reach further than the camera shows, because the first
+## 3v3 playtest was "the bots just shot at me from out-of-screen". A lobber can
+## attack what it cannot see, which is its whole appeal and would be exactly
+## that complaint again unless the target gets a warning.
+##
+## Drawn for every arcing shell regardless of whose it is, on the ground layer,
+## and it TIGHTENS as the shell falls so "about to land" reads without counting.
+## The shell itself is visible too — it clears the wall into open view — so
+## between the two there is no such thing as a blast nobody saw coming
+## (ADR-0030).
+func _draw_incoming_shells(alpha: float) -> void:
+	for bullet in _world.bullets:
+		if not bullet.active or not bullet.arcing or bullet.splash_radius <= 0.0:
+			continue
+
+		var at := bullet.render_position(alpha) + bullet.velocity * bullet.life
+		# THE SHELL'S own lifetime, not the local player's gun. See Bullet.total_life:
+		# borrowing the player's number made the ring stop tightening for every
+		# shell fired by a class whose flight is longer than your own.
+		var lifetime := maxf(bullet.total_life, 0.001)
+		# How much of the flight is LEFT: 1 at the muzzle, 0 as it lands.
+		var remaining: float = clampf(bullet.life / lifetime, 0.0, 1.0)
+
+		# Closing in as it falls: wide and faint when the shell has just left the
+		# barrel, tight and bright the instant before it lands.
+		var ring := bullet.splash_radius * lerpf(1.0, 1.45, remaining)
+		var tint := Palette.ARROW_TIP
+		draw_arc(at, ring, 0.0, TAU, 32, Color(tint.r, tint.g, tint.b, 0.75 - 0.3 * remaining), 3.0)
+		draw_circle(at, bullet.splash_radius, Color(tint.r, tint.g, tint.b, 0.10))
 
 
 ## Ability charge, as an arc around the player's feet.

@@ -16,12 +16,36 @@ var prev_position: Vector2 = Vector2.ZERO
 var velocity: Vector2 = Vector2.ZERO
 var damage: float = 0.0
 var life: float = 0.0
+
+## What `life` started at. Carried for the same reason `arcing` and `owner_team`
+## are: the SHOOTER may be dead before this lands, and the view needs to know how
+## far through its flight the shell is to tighten the landing ring.
+##
+## Reading the local player's gun for that instead was the shipped bug. It is
+## right only while every gun in the match has the same lifetime — which stopped
+## being true the moment a class could be slower than another. A Ranger watching
+## an enemy Lobber's shell divided a 0.33 s flight by a 0.165 s reach, so the
+## fraction saturated at 1.0 halfway out and the ring never widened at all: the
+## telegraph degraded in exactly the case it exists for (ADR-0019, ADR-0030).
+var total_life: float = 0.0
+
 var active: bool = false
 
 ## Team of whoever fired it. Carried on the projectile because at the moment of
 ## impact the shooter may already be dead, and a bullet in flight has to keep
 ## knowing whose it was. This is what makes friendly fire rejectable.
 var owner_team: int = 0
+
+## Does this shell fly OVER walls rather than into them?
+##
+## Read by SimWorld._tick_bullets(), which skips the wall cast entirely for an
+## arcing shell. Carried on the projectile rather than looked up from the
+## shooter's class because the shooter may be dead before it lands — the same
+## reason owner_team is here.
+var arcing: bool = false
+
+## Blast radius on expiry. Zero means it simply stops.
+var splash_radius: float = 0.0
 
 ## Instance id of the fighter that fired it, or 0.
 ##
@@ -40,15 +64,20 @@ func launch(
 	dmg: float,
 	lifetime: float,
 	team: int = 0,
-	shooter_id: int = 0
+	shooter_id: int = 0,
+	flies_over_walls: bool = false,
+	blast_radius: float = 0.0
 ) -> void:
 	owner_team = team
 	owner_id = shooter_id
+	arcing = flies_over_walls
+	splash_radius = blast_radius
 	position = from
 	prev_position = from
 	velocity = dir * speed
 	damage = dmg
 	life = lifetime
+	total_life = lifetime
 	active = true
 
 

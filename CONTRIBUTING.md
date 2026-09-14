@@ -51,6 +51,7 @@ bash tests/test_docs_links.sh                         # no dead doc links
 ./tools/smoke_test.sh  "$GODOT" 300                   # does it boot?
 ./tools/render_test.sh "$GODOT" 90  build/shot.png   idle
 ./tools/render_test.sh "$GODOT" 240 build/combat.png combat
+./tools/render_test.sh "$GODOT" 300 build/lob.png    lob    # a shell over a wall
 ./tools/verify_ui.sh   "$GODOT"                       # can the controls be TOUCHED?
 ```
 

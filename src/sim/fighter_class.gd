@@ -45,6 +45,22 @@ var ability: String = ""
 var pellets: int = 1
 var spread_deg: float = 0.0
 
+## Does this gun's shell fly OVER walls?
+##
+## The one property that changes how the arena is played rather than how a duel
+## goes: stone stops being an answer. It is also the property that runs straight
+## into ADR-0016 — nothing may reach further than the camera shows, because the
+## first 3v3 playtest was "the bots just shot at me from out-of-screen" — so it
+## is fair only alongside the three telegraphs in ADR-0030, and those are built
+## in rather than hoped for.
+var arcing: bool = false
+
+## Radius of the blast when an arcing shell lands. Zero means no splash.
+##
+## Damage falls off linearly to nothing at the edge, so where you stand inside
+## the circle matters and a near miss is a graze rather than a full hit.
+var splash_radius: float = 0.0
+
 var damage_mult: float = 1.0
 var fire_interval_mult: float = 1.0
 var reach_mult: float = 1.0
@@ -142,6 +158,8 @@ static func _from_dictionary(class_id: String, entry: Dictionary) -> FighterClas
 	# five-year-old can diagnose.
 	out.pellets = maxi(1, int(entry.get("pellets", 1)))
 	out.spread_deg = float(entry.get("spread_deg", 0.0))
+	out.arcing = bool(entry.get("arcing", false))
+	out.splash_radius = float(entry.get("splash_radius", 0.0))
 	out.damage_mult = float(entry.get("damage", 1.0))
 	out.fire_interval_mult = float(entry.get("fire_interval", 1.0))
 	out.reach_mult = float(entry.get("reach", 1.0))
