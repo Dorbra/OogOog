@@ -17,6 +17,8 @@ var _log_label: RichTextLabel
 var _info_label: Label
 var _sliders: Dictionary = {}
 var _override_badge: Label
+var _net_label: Label
+var _address_edit: LineEdit
 var _open := false
 
 ## Ticked every frame, read by the Info tab. Owned here rather than by the HUD
@@ -106,6 +108,7 @@ func _build_panel() -> void:
 	tabs.add_child(_build_tuning_tab())
 	tabs.add_child(_build_log_tab())
 	tabs.add_child(_build_info_tab())
+	tabs.add_child(_build_net_tab())
 
 
 func _build_tuning_tab() -> Control:
@@ -279,6 +282,106 @@ func _build_info_tab() -> Control:
 	return box
 
 
+## The tab docs/LAN_SPIKE.md has told people to open since M3.0, which until now
+## did not exist.
+##
+## That was found while planning this branch and is recorded rather than quietly
+## fixed: the spike's four questions have been "awaiting a verdict from real
+## hardware" for five milestones with no build in which they could be answered,
+## because the flow the document described was never built.
+##
+## THE NUMBER THAT MATTERS HERE IS THE PING. `feat/lan` is host-authoritative
+## with no prediction and no rollback, which is the right design if a LAN
+## round-trip is 5-20 ms and the wrong one if it is 200. That was assumed rather
+## than measured — a deliberate choice, to avoid a whole spike PR ahead of a
+## working game — so this readout is what makes the assumption falsifiable in
+## ten seconds instead of leaving "it feels laggy" as the only evidence. Read it
+## during a real fight, not in the lobby.
+##
+## ENet seeds round-trip time at 500 ms and converges over a few seconds, so the
+## first reading after somebody joins is a placeholder. Give it five seconds.
+func _build_net_tab() -> Control:
+	var box := VBoxContainer.new()
+	box.name = "Net"
+
+	_net_label = Label.new()
+	_net_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	box.add_child(_net_label)
+
+	# The manual address, and the reason it is HERE rather than on the lobby:
+	# LanBeacon's own header names AP isolation — consumer routers that drop
+	# broadcast traffic between wireless clients — as the likely discovery
+	# failure. When that happens ENet still connects fine by direct address, so
+	# this is the fallback that turns "it found nothing" into a game. Typing an
+	# IP is an adult's job, which is exactly what a developer overlay is for.
+	var row := HBoxContainer.new()
+	_address_edit = LineEdit.new()
+	_address_edit.placeholder_text = "192.168.x.x"
+	_address_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(_address_edit)
+
+	var join := Button.new()
+	join.text = "Join"
+	join.focus_mode = Control.FOCUS_NONE
+	join.pressed.connect(func() -> void: Lan.join(_address_edit.text.strip_edges()))
+	row.add_child(join)
+	box.add_child(row)
+
+	var leave := Button.new()
+	leave.text = "Leave"
+	leave.focus_mode = Control.FOCUS_NONE
+	leave.pressed.connect(func() -> void: Lan.leave())
+	box.add_child(leave)
+
+	var copy_button := Button.new()
+	copy_button.text = "Copy net status"
+	copy_button.focus_mode = Control.FOCUS_NONE
+	copy_button.pressed.connect(func() -> void: DisplayServer.clipboard_set(_net_label.text))
+	box.add_child(copy_button)
+
+	return box
+
+
+## One block of text somebody can read out or paste into a chat.
+##
+## Every line is here because it distinguishes two failures that look identical
+## on a phone: "nothing is happening" has at least four causes, and without this
+## they are indistinguishable from each other.
+func _describe_net() -> String:
+	if Net == null or not Net.online():
+		return "OFFLINE\n\nnothing is connected.\nfound on the network: %d" % _beacon_count()
+
+	var lines: Array[String] = []
+	lines.append("HOST" if Lan.hosting() else "CLIENT")
+	lines.append("id      %d" % Net.local_id())
+	lines.append("peers   %s" % str(Net.peer_ids()))
+	# THE headline. Against the 50 ms above which this design stops being the
+	# right one, so the reading carries its own verdict rather than needing one.
+	var worst := Net.worst_ping_ms()
+	lines.append(
+		(
+			"ping    %s"
+			% (
+				"waiting"
+				if worst < 0
+				else "%d ms  %s" % [worst, "OK" if worst <= 50 else "TOO HIGH — tell Claude"]
+			)
+		)
+	)
+	lines.append("seat    %d" % Lan.local_seat)
+	lines.append("roster  %s" % str(Lan.roster))
+	lines.append("started %s" % str(Lan.started))
+	lines.append("found   %d" % _beacon_count())
+	if not Net.last_error.is_empty():
+		lines.append("")
+		lines.append("last error: %s" % Net.last_error)
+	return "\n".join(lines)
+
+
+func _beacon_count() -> int:
+	return Beacon.host_addresses().size() if Beacon != null else 0
+
+
 func _copy_tuning_json() -> void:
 	DisplayServer.clipboard_set(Tuning.to_json())
 
@@ -293,6 +396,8 @@ func _process(delta: float) -> void:
 		_info_label.text = "%s\n\n%s" % [BuildInfo.describe(), _frames.describe()]
 	if _open and _log_label != null and _log_label.text.is_empty():
 		_refresh_log()
+	if _open and _net_label != null:
+		_net_label.text = _describe_net()
 
 
 func _set_open(open: bool) -> void:

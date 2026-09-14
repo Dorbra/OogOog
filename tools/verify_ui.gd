@@ -73,6 +73,12 @@ func _run(main: Node) -> void:
 	await process_frame
 	await process_frame
 
+	# THE LOBBY IS THE FIRST SCREEN NOW, and it sits above the setup screen
+	# eating every tap. Checking it first is not tidiness: without dismissing it
+	# every assertion below this line would tap the lobby instead and fail for
+	# the wrong reason.
+	await _check_lobby(main)
+
 	var screens: Node = _find(main, "match_screens")
 	_check(screens != null, "the match screens exist in the scene")
 	if screens == null:
@@ -167,6 +173,73 @@ func _run(main: Node) -> void:
 ## The safe area is the specific trap. Every other screen in this project
 ## applies it; match_screens.gd did not, and the class row sat at 6% from the
 ## top — exactly where a phone puts its cutout.
+## The three choices that decide whether this is one phone or three.
+##
+## Every one of them is unreachable in exactly the way the setup screen once was
+## — a Control on a CanvasLayer with no rect draws perfectly and cannot be
+## touched (ADR-0019) — and this screen is now the FIRST thing anybody sees. If
+## it cannot be tapped the game does not start at all, for anybody, and the
+## render capture would still look right.
+##
+## The assertions are behavioural rather than visual: hosting must actually open
+## a socket and put the beacon into broadcast, looking must put it into listen,
+## and alone must leave no socket open at all. A capture can show three cards; it
+## cannot show that one of them started a server.
+func _check_lobby(main: Node) -> void:
+	var lobby: Node = _find(main, "lobby_screen")
+	_check(lobby != null, "the lobby exists in the scene")
+	if lobby == null:
+		return
+
+	var view: Vector2 = root.get_visible_rect().size
+	_check(lobby.size.x > 0.0 and lobby.size.y > 0.0, "the lobby has a non-zero rect")
+	_check(
+		is_equal_approx(lobby.size.x, view.x) and is_equal_approx(lobby.size.y, view.y),
+		"and it covers the whole viewport"
+	)
+	_check(lobby.visible, "and it is up before anything else")
+
+	var net: Node = root.get_node_or_null("Net")
+	var beacon: Node = root.get_node_or_null("Beacon")
+	var lan: Node = root.get_node_or_null("Lan")
+	_check(net != null and beacon != null and lan != null, "the net autoloads are present")
+	if net == null or beacon == null or lan == null:
+		return
+
+	# HOST. The one that has to open a real server.
+	_tap(lobby.call("_choice_rect", 1).get_center())
+	await process_frame
+	_check(bool(lan.call("hosting")), "tapping host actually hosts")
+	_check(bool(beacon.call("active")), "and starts shouting on the beacon")
+	_check(int(lobby.get("mode")) == 1, "and the lobby moves to its hosting state")
+
+	# Back out, then LOOK. Discovery and hosting must not be the same state:
+	# a looker that also broadcast would find itself.
+	_tap(lobby.call("_back_rect").get_center())
+	await process_frame
+	_check(not bool(net.call("online")), "backing out closes the socket")
+
+	_tap(lobby.call("_choice_rect", 2).get_center())
+	await process_frame
+	_check(bool(beacon.call("active")), "tapping look starts listening")
+	_check(not bool(lan.call("hosting")), "and does NOT host")
+	_check(int(lobby.get("mode")) == 2, "and the lobby moves to its looking state")
+
+	_tap(lobby.call("_back_rect").get_center())
+	await process_frame
+
+	# ALONE. The path that must never break: it is the game as it shipped, and
+	# it has to leave no socket open at all.
+	var started := []
+	lobby.connect("ready_to_play", func() -> void: started.append(1))
+	_tap(lobby.call("_choice_rect", 0).get_center())
+	await process_frame
+	_check(not started.is_empty(), "tapping alone starts the game")
+	_check(not bool(net.call("online")), "and opens no socket")
+	_check(not bool(beacon.call("active")), "and no beacon")
+	_check(not lobby.visible, "and gets out of the way")
+
+
 func _check_setup_layout(screens: Node) -> void:
 	var usable: Rect2 = screens.call("_usable")
 	_check(usable.size.x > 0.0 and usable.size.y > 0.0, "the setup screen has a usable area")

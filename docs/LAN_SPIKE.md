@@ -1,29 +1,50 @@
 # M3.0 — LAN transport spike
 
-**Status: the transport is written and gated on loopback. THE FLOW BELOW IS NOT
-BUILT, and nothing in a shipped APK has ever reached it.**
+**Status: CLOSED by `feat/lan` (M4.2). Three of its four questions are now
+answered by the code; the fourth still needs two phones on a real router, and
+the build that can answer it finally exists.**
 
-> **Correction, M4.1.** This document describes running the spike from a **Net
-> tab** in the DBG overlay. There is no Net tab. `debug_overlay.gd` builds
-> Tuning, Log and Info and nothing else; `NetLink` and `LanBeacon` are reachable
-> only from `tools/net_probe.gd`, the loopback gate, and `main.gd` never touches
-> either of them. So the four questions below have been "awaiting a verdict from
-> real hardware" for several milestones **with no build in which they could be
-> answered** — the instructions were written for a UI the PR did not ship.
+> **The correction that closed it, kept because the trap recurs.** From M3.0 to
+> M4.1 this document told people to run the spike from a **Net tab** in the DBG
+> overlay. There was no Net tab. `debug_overlay.gd` built Tuning, Log and Info
+> and nothing else; `NetLink` and `LanBeacon` were reachable only from
+> `tools/net_probe.gd`, the loopback gate, and `main.gd` never touched either.
 >
-> This is the failure [ADR-0019](decisions/0019-appearance-is-not-behaviour.md)
-> and [ADR-0027](decisions/0027-measure-a-debt-before-paying-it.md) were both
-> written about: a document asserting a capability the artifact does not have.
-> It is recorded here rather than quietly fixed so that `feat/lan` starts from
-> what is true — **building the tab is the first task in that branch**, not an
-> assumption it inherits.
+> So the four questions below sat "awaiting a verdict from real hardware" for
+> **five milestones with no build in which they could be answered.** The
+> instructions were written for a UI the PR did not ship — exactly the failure
+> [ADR-0019](decisions/0019-appearance-is-not-behaviour.md) and
+> [ADR-0027](decisions/0027-measure-a-debt-before-paying-it.md) are about: a
+> document asserting a capability the artifact does not have.
 >
-> Everything below the line is therefore the *intended* procedure, kept because
-> it is still what the experiment needs to do. It is not yet a thing you can do.
+> It was recorded rather than quietly fixed so `feat/lan` would start from what
+> was true. **The Net tab is built now**, and so is the thing it was supposed to
+> be testing.
 
-This is an experiment, not a feature. It exists to answer four questions that
-cannot be answered from a build machine, and the answers decide how M3.3 is
-built.
+## What to actually do now
+
+The spike's own peer-to-peer position model is **gone** — deleted, not disabled.
+`feat/lan` built the real thing on top of the transport
+([ADR-0032](decisions/0032-the-network-is-a-command-producer.md)), so there is
+nothing left to run separately:
+
+1. Install the same APK on two or more phones on the same WiFi.
+2. On phone A, tap the **cat with a plus** on the first screen.
+3. On phone B, tap the **cat with a magnifier**, then tap the game it finds.
+4. Phone B picks a class; phone A picks the team size and presses play.
+5. **Then open DBG → Net on both and read the ping**, during a real fight
+   rather than in the lobby, five seconds after joining — ENet seeds round-trip
+   time at 500 ms and converges.
+
+If the list on phone B stays empty, go to **DBG → Net**, type phone A's IP into
+the box and tap **Join**. That distinction still matters — see question 2.
+
+---
+
+It existed to answer four questions that cannot be answered from a build
+machine. Their answers were supposed to decide how the real netcode was built;
+in the end three of them were answered by building it, and the remaining one is
+the only thing between here and three people playing in one room.
 
 ---
 
@@ -47,28 +68,26 @@ connection, peer signals, RPC delivery, and state actually crossing both ways.
 That catches the ordinary breakages — a renamed API, a wrong `@rpc` annotation,
 a peer never polled. It leaves exactly one class of question for hardware.
 
-## How to run it
+## How it was meant to be run
 
-Install the APK on two or more phones **on the same WiFi**.
+*(Superseded — see "What to actually do now" at the top. Kept because the
+question numbering below refers to it.)*
 
 1. On phone A: **DBG → Net → HOST**.
 2. On phone B: **DBG → Net → FIND GAMES**, then tap the host in the list.
 3. Move around. A **blue cat** is the other player.
 
-If the list stays empty, type phone A's IP into the box and tap **JOIN**. That
-distinction matters — see question 2.
-
 ## The four questions
 
-### 1. Does ENet connect at all between these phones?
+### 1. Does ENet connect at all between these phones? — **still open**
 
-Watch `state` and `peers` in the Net tab. `JOINED` with `peers 1` is a yes.
+Watch the role and `peers` in the Net tab. `CLIENT` with one peer is a yes.
 
 A no here is fundamental and changes the plan: it would most likely mean the
 network isolates clients from each other, and the fallback would be one device
 acting as a hotspot rather than everyone joining the house WiFi.
 
-### 2. Does broadcast discovery survive the router?
+### 2. Does broadcast discovery survive the router? — **still open**
 
 Many consumer access points drop broadcast traffic between wireless clients —
 "AP isolation", and most guest networks. When that happens **ENet still connects
@@ -83,13 +102,17 @@ If discovery fails but manual joining works, M3.3 needs a different join flow �
 probably a short room code — because *"ask an adult for the IP address"* is not
 a viable way for a 5-year-old to join a game.
 
-### 3. What is the actual latency?
+### 3. What is the actual latency? — **THE ONE THAT MATTERS**
 
 The Net tab reports **worst ping** across peers, measured at the application
 layer: request to reply including frame scheduling, which is the delay a player
 feels rather than the delay the socket sees.
 
-This is the number that decides M3.3's architecture:
+`feat/lan` did not wait for this number. It **assumed** the first row and built
+host-authoritative with no prediction and no rollback — a deliberate choice, to
+avoid a whole spike PR ahead of a working game, and one the user made knowing
+the risk. The Net tab exists so the assumption is falsifiable in ten seconds
+instead of leaving "it feels laggy" as the only evidence:
 
 | Worst ping | What it means |
 |---|---|
@@ -97,17 +120,28 @@ This is the number that decides M3.3's architecture:
 | 50–120 ms | Playable, but the local player needs input prediction so their own cat responds instantly. |
 | over ~120 ms | Something is wrong with the network rather than the code. Investigate before writing netcode around it. |
 
-Loopback measures 6 ms. Real WiFi should land in the low tens.
+Loopback measures 6-7 ms. Real WiFi should land in the low tens, and the tab
+prints its own verdict against 50 ms so the reading needs no interpretation.
 
-### 4. Does the `InputCommand` seam hold?
+**If it reads badly, the fix is known and contained**: client-side prediction on
+movement only, in `src/net/net_game.gd`, against a game that already works.
 
-Not answered by this spike, and deliberately so. Here **every peer publishes its
-own position** — which is *not* the architecture the real game will use. M3.3
-makes the host authoritative: clients send `InputCommand`, the host runs the one
-true simulation, and broadcasts the result.
+### 4. Does the `InputCommand` seam hold? — **ANSWERED: yes, completely**
 
-Separating the two keeps the questions separate. This one is about the network.
-That one is about the simulation.
+This was the question the spike deferred, and building the real thing answered
+it better than any experiment would have. **`SimWorld.tick()` is byte-for-byte
+unchanged by `feat/lan`.** A person on another phone is a `Fighter` whose
+`controller` is a `RemoteController`, which is the same shape a bot has had
+since M3.1d.
+
+`src/sim/input_command.gd` called this in M1 — *"the network becomes a third
+producer and the simulation does not change at all"* — and it was exactly right.
+Recorded in [ADR-0032](decisions/0032-the-network-is-a-command-producer.md).
+
+The spike's own model is deleted: every peer publishing its own position was
+never the architecture, `NetLink` said so at the time, and leaving it in would
+have meant a dead RPC transmitting `(0, 0)` to every peer twenty times a second
+for a whole match.
 
 ## What to report back
 

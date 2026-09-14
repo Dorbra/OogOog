@@ -2,11 +2,15 @@
 # Connects two headless Godot processes over 127.0.0.1 and asserts that state
 # actually crosses between them.
 #
-# The whole networking path is exercised here except the physical radio: server
-# creation, client connection, peer signals, RPC delivery, and positions moving
-# from one process into the other. That is the part which breaks from a renamed
-# API or a wrong @rpc annotation, and it is the part that would otherwise only
-# be discovered by installing on two phones.
+# The whole networking path is exercised here except the physical radio, and
+# since feat/lan that means the WHOLE ROUND TRIP rather than "a Vector2 crossed":
+# the client sends an InputCommand, the HOST's simulation acts on it, the host's
+# state comes back as a snapshot, and the client draws a bullet it did not
+# decide to exist.
+#
+# Every controller on the host is nulled except the seat the client drives, so
+# that host's world is incapable of producing a bullet on its own. One existing
+# at all IS the round trip; there is no other path to it.
 #
 # What this canNOT tell you: whether the household router carries the traffic,
 # and what the real over-the-air latency is. Those need hardware, and answering
@@ -72,13 +76,13 @@ if [ "$HOST_RC" -ne 0 ] || [ "$CLIENT_RC" -ne 0 ]; then
 fi
 
 # A green exit code is not enough on its own: the probe must have said why.
-if ! grep -q "received position from" "${OUT}/host.log"; then
-	echo "::error::host never received a position from the client"
+if ! grep -q "command reached the authority" "${OUT}/host.log"; then
+	echo "::error::the client's InputCommand never reached the host's simulation"
 	exit 1
 fi
-if ! grep -q "received position from" "${OUT}/client.log"; then
-	echo "::error::client never received a position from the host"
+if ! grep -q "snapshot arrived carrying a bullet" "${OUT}/client.log"; then
+	echo "::error::the host's state never came back to the client as a snapshot"
 	exit 1
 fi
 
-echo "PASS — two processes connected and exchanged state both ways"
+echo "PASS — input crossed to the authority and its state came back"
